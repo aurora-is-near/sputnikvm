@@ -11,7 +11,7 @@ use alloc::{
 };
 use core::{cmp::min, convert::Infallible};
 use ethereum::Log;
-use evm_core::{ExitFatal, ExitRevert};
+use evm_core::{ExitFatal, ExitRevert, InterpreterHandler, Machine};
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
 
@@ -932,6 +932,56 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	}
 }
 
+impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> InterpreterHandler
+	for StackExecutor<'config, 'precompiles, S, P>
+{
+	fn on_bytecode(
+		&mut self,
+		opcode: Opcode,
+		_pc: usize,
+		machine: &Machine,
+		address: &H160,
+	) -> Result<(), ExitError> {
+		#[cfg(feature = "tracing")]
+		use evm_runtime::tracing::Event::Step;
+		event!(Step {
+			address,
+			opcode,
+			position: _pc,
+			stack: machine.stack(),
+			memory: machine.memory(),
+		});
+
+		if let Some(cost) = gasometer::static_opcode_cost(opcode) {
+			self.state.metadata_mut().gasometer.record_cost(cost)?;
+		} else {
+			let is_static = self.state.metadata().is_static;
+			let (gas_cost, target, memory_cost) = gasometer::dynamic_opcode_cost(
+				*address,
+				opcode,
+				machine.stack(),
+				is_static,
+				self.config,
+				self,
+			)?;
+
+			let gasometer = &mut self.state.metadata_mut().gasometer;
+
+			gasometer.record_dynamic_cost(gas_cost, memory_cost)?;
+			match target {
+				StorageTarget::Address(address) => {
+					self.state.metadata_mut().access_address(address)
+				}
+				StorageTarget::Slot(address, key) => {
+					self.state.metadata_mut().access_storage(address, key)
+				}
+				StorageTarget::None => (),
+			}
+		}
+		Ok(())
+	}
+}
+
 impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	for StackExecutor<'config, 'precompiles, S, P>
 {
@@ -970,21 +1020,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 			.unwrap_or_default()
 	}
 
-	fn exists(&self, address: H160) -> bool {
-		if self.config.empty_considered_exists {
-			self.state.exists(address)
-		} else {
-			self.state.exists(address) && !self.state.is_empty(address)
-		}
-	}
-
-	fn is_cold(&self, address: H160, maybe_index: Option<H256>) -> bool {
-		match maybe_index {
-			None => !self.precompile_set.is_precompile(address) && self.state.is_cold(address),
-			Some(index) => self.state.is_storage_cold(address, index),
-		}
-	}
-
 	fn gas_left(&self) -> U256 {
 		U256::from(self.state.metadata().gasometer.gas())
 	}
@@ -992,9 +1027,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	fn gas_price(&self) -> U256 {
 		self.state.gas_price()
 	}
+
 	fn origin(&self) -> H160 {
 		self.state.origin()
 	}
+
 	fn block_hash(&self, number: U256) -> H256 {
 		self.state.block_hash(number)
 	}
@@ -1019,9 +1056,22 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	fn chain_id(&self) -> U256 {
 		self.state.chain_id()
 	}
-
+	fn exists(&self, address: H160) -> bool {
+		if self.config.empty_considered_exists {
+			self.state.exists(address)
+		} else {
+			self.state.exists(address) && !self.state.is_empty(address)
+		}
+	}
 	fn deleted(&self, address: H160) -> bool {
 		self.state.deleted(address)
+	}
+
+	fn is_cold(&self, address: H160, maybe_index: Option<H256>) -> bool {
+		match maybe_index {
+			None => !self.precompile_set.is_precompile(address) && self.state.is_cold(address),
+			Some(index) => self.state.is_storage_cold(address, index),
+		}
 	}
 
 	fn set_storage(&mut self, address: H160, index: H256, value: H256) -> Result<(), ExitError> {

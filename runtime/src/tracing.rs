@@ -12,7 +12,7 @@ pub trait EventListener {
 #[derive(Debug, Copy, Clone)]
 pub enum Event<'a> {
 	Step {
-		context: &'a Context,
+		address: H160,
 		opcode: Opcode,
 		position: &'a Result<usize, ExitReason>,
 		stack: &'a Stack,

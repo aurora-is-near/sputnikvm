@@ -38,33 +38,7 @@ use alloc::vec::Vec;
 
 macro_rules! step {
 	( $self:expr, $handler:expr, $return:tt $($err:path)?; $($ok:path)? ) => ({
-		if let Some((opcode, stack)) = $self.machine.inspect() {
-			event!(Step {
-				context: &$self.context,
-				opcode,
-				position: $self.machine.position(),
-				stack,
-				memory: $self.machine.memory()
-			});
-
-			match $handler.pre_validate(&$self.context, opcode, stack) {
-				Ok(()) => (),
-				Err(e) => {
-					$self.machine.exit(e.clone().into());
-					$self.status = Err(e.into());
-				},
-			}
-		}
-
-		match &$self.status {
-			Ok(()) => (),
-			Err(e) => {
-				#[allow(unused_parens)]
-				$return $($err)*(Capture::Exit(e.clone()))
-			},
-		}
-
-		let result = $self.machine.step();
+		let result = $self.machine.step($handler, &$self.context.address);
 
 		event!(StepResult {
 			result: &result,
@@ -142,7 +116,7 @@ impl<'config> Runtime<'config> {
 	}
 
 	/// Step the runtime.
-	pub fn step<'a, H: Handler>(
+	pub fn step<'a, H: Handler + InterpreterHandler>(
 		&'a mut self,
 		handler: &mut H,
 	) -> Result<(), Capture<ExitReason, Resolve<'a, 'config, H>>> {
@@ -150,7 +124,7 @@ impl<'config> Runtime<'config> {
 	}
 
 	/// Loop stepping the runtime until it stops.
-	pub fn run<'a, H: Handler>(
+	pub fn run<'a, H: Handler + InterpreterHandler>(
 		&'a mut self,
 		handler: &mut H,
 	) -> Capture<ExitReason, Resolve<'a, 'config, H>> {
