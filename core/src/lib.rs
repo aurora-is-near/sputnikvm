@@ -47,13 +47,16 @@ pub struct Machine {
 
 /// EVM interpreter handler.
 pub trait InterpreterHandler {
-	fn on_bytecode(
+	fn before_bytecode(
 		&mut self,
 		opcode: Opcode,
 		pc: usize,
-		stack: &Machine,
+		machine: &Machine,
 		address: &H160,
 	) -> Result<(), ExitError>;
+
+	// Only invoked if #[cfg(feature = "tracing")]
+	fn after_bytecode(&mut self, result: &Result<(), Capture<ExitReason, Trap>>, machine: &Machine);
 }
 
 impl Machine {
@@ -198,7 +201,7 @@ impl SimpleInterpreterHandler {
 }
 
 impl InterpreterHandler for SimpleInterpreterHandler {
-	fn on_bytecode(
+	fn before_bytecode(
 		&mut self,
 		opcode: Opcode,
 		_pc: usize,
@@ -208,5 +211,12 @@ impl InterpreterHandler for SimpleInterpreterHandler {
 		self.executed += 1;
 		self.profile[opcode.as_usize()] += 1;
 		Ok(())
+	}
+
+	fn after_bytecode(
+		&mut self,
+		_result: &Result<(), Capture<ExitReason, Trap>>,
+		_machine: &Machine,
+	) {
 	}
 }

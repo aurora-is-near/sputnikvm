@@ -11,7 +11,7 @@ use alloc::{
 };
 use core::{cmp::min, convert::Infallible};
 use ethereum::Log;
-use evm_core::{ExitFatal, ExitRevert, InterpreterHandler, Machine};
+use evm_core::{ExitFatal, ExitRevert, InterpreterHandler, Machine, Trap};
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
 
@@ -935,7 +935,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> InterpreterHandler
 	for StackExecutor<'config, 'precompiles, S, P>
 {
-	fn on_bytecode(
+	fn before_bytecode(
 		&mut self,
 		opcode: Opcode,
 		_pc: usize,
@@ -943,14 +943,18 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		address: &H160,
 	) -> Result<(), ExitError> {
 		#[cfg(feature = "tracing")]
-		use evm_runtime::tracing::Event::Step;
-		event!(Step {
-			address,
-			opcode,
-			position: _pc,
-			stack: machine.stack(),
-			memory: machine.memory(),
-		});
+		{
+			use evm_runtime::tracing::Event::Step;
+			evm_runtime::tracing::with(|listener| {
+				listener.event(Step {
+					address: *address,
+					opcode,
+					position: &Ok(_pc),
+					stack: machine.stack(),
+					memory: machine.memory(),
+				})
+			});
+		}
 
 		if let Some(cost) = gasometer::static_opcode_cost(opcode) {
 			self.state.metadata_mut().gasometer.record_cost(cost)?;
@@ -965,9 +969,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 				self,
 			)?;
 
-			let gasometer = &mut self.state.metadata_mut().gasometer;
-
-			gasometer.record_dynamic_cost(gas_cost, memory_cost)?;
+			self.state
+				.metadata_mut()
+				.gasometer
+				.record_dynamic_cost(gas_cost, memory_cost)?;
 			match target {
 				StorageTarget::Address(address) => {
 					self.state.metadata_mut().access_address(address)
@@ -979,6 +984,23 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 			}
 		}
 		Ok(())
+	}
+
+	fn after_bytecode(
+		&mut self,
+		_result: &Result<(), Capture<ExitReason, Trap>>,
+		_machine: &Machine,
+	) {
+		#[cfg(feature = "tracing")]
+		{
+			use evm_runtime::tracing::Event::StepResult;
+			evm_runtime::tracing::with(|listener| {
+				listener.event(StepResult {
+					result: _result,
+					return_value: _machine.return_value().as_slice(),
+				})
+			});
+		}
 	}
 }
 

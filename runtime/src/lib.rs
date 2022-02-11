@@ -39,12 +39,6 @@ use alloc::vec::Vec;
 macro_rules! step {
 	( $self:expr, $handler:expr, $return:tt $($err:path)?; $($ok:path)? ) => ({
 		let result = $self.machine.step($handler, &$self.context.address);
-
-		event!(StepResult {
-			result: &result,
-			return_value: &$self.machine.return_value(),
-		});
-
 		match result {
 			Ok(()) => $($ok)?(()),
 			Err(Capture::Exit(e)) => {

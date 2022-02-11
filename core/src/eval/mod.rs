@@ -50,7 +50,7 @@ fn eval_match<'a, H: InterpreterHandler>(
 				return Control::Exit(ExitSucceed::Stopped.into());
 			}
 		};
-		match handler.on_bytecode(op, pc, state, address) {
+		match handler.before_bytecode(op, pc, state, address) {
 			Ok(()) => (),
 			Err(e) => {
 				state.exit(e.clone().into());
@@ -177,6 +177,16 @@ fn eval_match<'a, H: InterpreterHandler>(
 				Control::Trap(Opcode(code))
 			}
 		};
+		#[cfg(feature = "tracing")]
+		{
+			use crate::Capture;
+			let result = match &control {
+				Control::Continue(_) | Control::Jump(_) => Ok(()),
+				Control::Trap(t) => Err(Capture::Trap(t)),
+				Control::Exit(e) => Err(Capture::Exit(e)),
+			};
+			handler.after_bytecode(&result, state);
+		}
 		pc = match control {
 			Control::Continue(bytes) => pc + bytes,
 			Control::Jump(pos) => pos,
@@ -464,7 +474,7 @@ fn eval_table<H: InterpreterHandler>(
 				return Control::Exit(ExitSucceed::Stopped.into());
 			}
 		};
-		match handler.on_bytecode(op, pc, state, address) {
+		match handler.before_bytecode(op, pc, state, address) {
 			Ok(()) => (),
 			Err(e) => {
 				state.exit(e.clone().into());
@@ -472,6 +482,17 @@ fn eval_table<H: InterpreterHandler>(
 			}
 		};
 		let control = TABLE[op.as_usize()](state, op, pc);
+
+		#[cfg(feature = "tracing")]
+		{
+			use crate::Capture;
+			let result = match &control {
+				Control::Continue(_) | Control::Jump(_) => Ok(()),
+				Control::Trap(t) => Err(Capture::Trap(*t)),
+				Control::Exit(e) => Err(Capture::Exit(e.clone())),
+			};
+			handler.after_bytecode(&result, state);
+		}
 		pc = match control {
 			Control::Continue(bytes) => pc + bytes,
 			Control::Jump(pos) => pos,
