@@ -464,6 +464,7 @@ fn eval_table<H: InterpreterHandler>(
 		table
 	};
 	let mut pc = position;
+	let mut bcs = 0;
 	loop {
 		// TODO: we need to optimize fetch loop by extracting raw slice
 		// with instructions.
@@ -482,7 +483,7 @@ fn eval_table<H: InterpreterHandler>(
 			}
 		};
 		let control = TABLE[op.as_usize()](state, op, pc);
-
+		bcs += 1;
 		#[cfg(feature = "tracing")]
 		{
 			use crate::Capture;
@@ -496,7 +497,7 @@ fn eval_table<H: InterpreterHandler>(
 		pc = match control {
 			Control::Continue(bytes) => pc + bytes,
 			Control::Jump(pos) => pos,
-			_ => return control,
+			_ => { println!("executed {} bcs ret {:?}", bcs, control); return control },
 		}
 	}
 }
