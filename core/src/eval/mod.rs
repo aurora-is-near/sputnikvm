@@ -464,16 +464,14 @@ fn eval_table<H: InterpreterHandler>(
 		table
 	};
 	let mut pc = position;
+	let my_code_vec = state.code.clone();
+	let my_code = my_code_vec.as_slice();
 	loop {
-		// TODO: we need to optimize fetch loop by extracting raw slice
-		// with instructions.
-		let op = match state.code.get(pc) {
-			Some(v) => Opcode(*v),
-			None => {
-				state.position = Err(ExitSucceed::Stopped.into());
-				return Control::Exit(ExitSucceed::Stopped.into());
-			}
-		};
+		if pc >= my_code.len() {
+			state.position = Err(ExitSucceed::Stopped.into());
+			return Control::Exit(ExitSucceed::Stopped.into());
+		}
+		let op = Opcode(my_code[pc]);
 		match handler.before_bytecode(op, pc, state, address) {
 			Ok(()) => (),
 			Err(e) => {
