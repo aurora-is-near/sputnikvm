@@ -935,6 +935,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> InterpreterHandler
 	for StackExecutor<'config, 'precompiles, S, P>
 {
+	#[inline]
 	fn before_bytecode(
 		&mut self,
 		opcode: Opcode,
@@ -986,6 +987,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		Ok(())
 	}
 
+	#[inline]
 	fn after_bytecode(
 		&mut self,
 		_result: &Result<(), Capture<ExitReason, Trap>>,

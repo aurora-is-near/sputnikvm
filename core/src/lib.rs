@@ -201,6 +201,7 @@ impl SimpleInterpreterHandler {
 }
 
 impl InterpreterHandler for SimpleInterpreterHandler {
+	#[inline]
 	fn before_bytecode(
 		&mut self,
 		opcode: Opcode,
@@ -213,6 +214,7 @@ impl InterpreterHandler for SimpleInterpreterHandler {
 		Ok(())
 	}
 
+	#[inline]
 	fn after_bytecode(
 		&mut self,
 		_result: &Result<(), Capture<ExitReason, Trap>>,
