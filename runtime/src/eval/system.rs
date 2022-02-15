@@ -22,7 +22,7 @@ pub fn sha3<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 	};
 
 	let ret = Keccak256::digest(data.as_slice());
-	push!(runtime, H256::from_slice(ret.as_slice()));
+	push_h256!(runtime, H256::from_slice(ret.as_slice()));
 
 	Control::Continue
 }
@@ -35,13 +35,13 @@ pub fn chainid<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 
 pub fn address<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 	let ret = H256::from(runtime.context.address);
-	push!(runtime, ret);
+	push_h256!(runtime, ret);
 
 	Control::Continue
 }
 
 pub fn balance<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	pop!(runtime, address);
+	pop_h256!(runtime, address);
 	push_u256!(runtime, handler.balance(address.into()));
 
 	Control::Continue
@@ -55,14 +55,14 @@ pub fn selfbalance<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H>
 
 pub fn origin<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 	let ret = H256::from(handler.origin());
-	push!(runtime, ret);
+	push_h256!(runtime, ret);
 
 	Control::Continue
 }
 
 pub fn caller<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 	let ret = H256::from(runtime.context.caller);
-	push!(runtime, ret);
+	push_h256!(runtime, ret);
 
 	Control::Continue
 }
@@ -70,7 +70,7 @@ pub fn caller<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 pub fn callvalue<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 	let mut ret = H256::default();
 	runtime.context.apparent_value.to_big_endian(&mut ret[..]);
-	push!(runtime, ret);
+	push_h256!(runtime, ret);
 
 	Control::Continue
 }
@@ -78,7 +78,7 @@ pub fn callvalue<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 pub fn gasprice<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 	let mut ret = H256::default();
 	handler.gas_price().to_big_endian(&mut ret[..]);
-	push!(runtime, ret);
+	push_h256!(runtime, ret);
 
 	Control::Continue
 }
@@ -86,27 +86,27 @@ pub fn gasprice<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 pub fn base_fee<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 	let mut ret = H256::default();
 	handler.block_base_fee_per_gas().to_big_endian(&mut ret[..]);
-	push!(runtime, ret);
+	push_h256!(runtime, ret);
 
 	Control::Continue
 }
 
 pub fn extcodesize<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	pop!(runtime, address);
+	pop_h256!(runtime, address);
 	push_u256!(runtime, handler.code_size(address.into()));
 
 	Control::Continue
 }
 
 pub fn extcodehash<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	pop!(runtime, address);
-	push!(runtime, handler.code_hash(address.into()));
+	pop_h256!(runtime, address);
+	push_h256!(runtime, handler.code_hash(address.into()));
 
 	Control::Continue
 }
 
 pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	pop!(runtime, address);
+	pop_h256!(runtime, address);
 	pop_u256!(runtime, memory_offset, code_offset, len);
 
 	try_or_fail!(runtime
@@ -161,13 +161,13 @@ pub fn returndatacopy<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 
 pub fn blockhash<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 	pop_u256!(runtime, number);
-	push!(runtime, handler.block_hash(number));
+	push_h256!(runtime, handler.block_hash(number));
 
 	Control::Continue
 }
 
 pub fn coinbase<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	push!(runtime, handler.block_coinbase().into());
+	push_h256!(runtime, handler.block_coinbase());
 	Control::Continue
 }
 
@@ -192,9 +192,9 @@ pub fn gaslimit<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 }
 
 pub fn sload<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	pop!(runtime, index);
+	pop_h256!(runtime, index);
 	let value = handler.storage(runtime.context.address, index);
-	push!(runtime, value);
+	push_h256!(runtime, value);
 
 	event!(SLoad {
 		address: runtime.context.address,
@@ -206,7 +206,7 @@ pub fn sload<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 }
 
 pub fn sstore<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
-	pop!(runtime, index, value);
+	pop_h256!(runtime, index, value);
 
 	event!(SStore {
 		address: runtime.context.address,
@@ -241,7 +241,7 @@ pub fn log<H: Handler>(runtime: &mut Runtime, n: u8, handler: &mut H) -> Control
 
 	let mut topics = Vec::new();
 	for _ in 0..(n as usize) {
-		match runtime.machine.stack_mut().pop() {
+		match runtime.machine.stack_mut().pop_h256() {
 			Ok(value) => {
 				topics.push(value);
 			}
@@ -256,7 +256,7 @@ pub fn log<H: Handler>(runtime: &mut Runtime, n: u8, handler: &mut H) -> Control
 }
 
 pub fn suicide<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
-	pop!(runtime, target);
+	pop_h256!(runtime, target);
 
 	match handler.mark_delete(runtime.context.address, target.into()) {
 		Ok(()) => (),
@@ -282,7 +282,7 @@ pub fn create<H: Handler>(runtime: &mut Runtime, is_create2: bool, handler: &mut
 	};
 
 	let scheme = if is_create2 {
-		pop!(runtime, salt);
+		pop_h256!(runtime, salt);
 		let code_hash = H256::from_slice(Keccak256::digest(&code).as_slice());
 		CreateScheme::Create2 {
 			caller: runtime.context.address,
@@ -302,25 +302,25 @@ pub fn create<H: Handler>(runtime: &mut Runtime, is_create2: bool, handler: &mut
 
 			match reason {
 				ExitReason::Succeed(_) => {
-					push!(runtime, create_address);
+					push_h256!(runtime, create_address);
 					Control::Continue
 				}
 				ExitReason::Revert(_) => {
-					push!(runtime, H256::default());
+					push_h256!(runtime, H256::default());
 					Control::Continue
 				}
 				ExitReason::Error(_) => {
-					push!(runtime, H256::default());
+					push_h256!(runtime, H256::default());
 					Control::Continue
 				}
 				ExitReason::Fatal(e) => {
-					push!(runtime, H256::default());
+					push_h256!(runtime, H256::default());
 					Control::Exit(e.into())
 				}
 			}
 		}
 		Capture::Trap(interrupt) => {
-			push!(runtime, H256::default());
+			push_h256!(runtime, H256::default());
 			Control::CreateInterrupt(interrupt)
 		}
 	}
@@ -330,7 +330,7 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 	runtime.return_data_buffer = Vec::new();
 
 	pop_u256!(runtime, gas);
-	pop!(runtime, to);
+	pop_h256!(runtime, to);
 	let gas = if gas > U256::from(u64::MAX) {
 		None
 	} else {
@@ -454,7 +454,7 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 			}
 		}
 		Capture::Trap(interrupt) => {
-			push!(runtime, H256::default());
+			push_h256!(runtime, H256::default());
 			Control::CallInterrupt(interrupt)
 		}
 	}
