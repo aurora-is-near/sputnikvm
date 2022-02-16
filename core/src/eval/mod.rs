@@ -6,7 +6,7 @@ mod misc;
 
 use crate::{ExitError, ExitReason, ExitSucceed, InterpreterHandler, Machine, Opcode};
 use core::ops::{BitAnd, BitOr, BitXor};
-use primitive_types::{H160, H256, U256};
+use primitive_types::{H160, U256};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Control {
