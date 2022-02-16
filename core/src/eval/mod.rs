@@ -23,181 +23,10 @@ pub fn eval<H: InterpreterHandler>(
 	handler: &mut H,
 	address: &H160,
 ) -> Control {
-	#[cfg(feature = "match-interpreter")]
-	{
-		eval_match(state, position, handler, address)
-	}
-	#[cfg(not(feature = "match-interpreter"))]
-	{
-		eval_table(state, position, handler, address)
-	}
+	eval_table(state, position, handler, address)
 }
 
 #[inline]
-#[cfg(feature = "match-interpreter")]
-fn eval_match<'a, H: InterpreterHandler>(
-	state: &mut Machine,
-	position: usize,
-	handler: &mut H,
-	address: &H160,
-) -> Control {
-	let mut pc = position;
-	loop {
-		let op = match state.code.get(pc) {
-			Some(v) => Opcode(*v),
-			None => {
-				state.position = Err(ExitSucceed::Stopped.into());
-				return Control::Exit(ExitSucceed::Stopped.into());
-			}
-		};
-		match handler.before_bytecode(op, pc, state, address) {
-			Ok(()) => (),
-			Err(e) => {
-				state.exit(e.clone().into());
-				return Control::Exit(ExitReason::Error(e));
-			}
-		};
-		let control = match op {
-			Opcode::ADD => op2_u256_tuple!(state, overflowing_add),
-			Opcode::MUL => op2_u256_tuple!(state, overflowing_mul),
-			Opcode::SUB => op2_u256_tuple!(state, overflowing_sub),
-			Opcode::DIV => op2_u256_fn!(state, self::arithmetic::div),
-			Opcode::SDIV => op2_u256_fn!(state, self::arithmetic::sdiv),
-			Opcode::EXP => op2_u256_fn!(state, self::arithmetic::exp),
-			Opcode::SIGNEXTEND => op2_u256_fn!(state, self::arithmetic::signextend),
-			Opcode::LT => op2_u256_bool_ref!(state, lt),
-			Opcode::GT => op2_u256_bool_ref!(state, gt),
-			Opcode::SLT => op2_u256_fn!(state, self::bitwise::slt),
-			Opcode::SGT => op2_u256_fn!(state, self::bitwise::sgt),
-			Opcode::EQ => op2_u256_bool_ref!(state, eq),
-			Opcode::ISZERO => op1_u256_fn!(state, self::bitwise::iszero),
-			Opcode::AND => op2_u256!(state, bitand),
-			Opcode::OR => op2_u256!(state, bitor),
-			Opcode::XOR => op2_u256!(state, bitxor),
-			Opcode::NOT => op1_u256_fn!(state, self::bitwise::not),
-			Opcode::BYTE => op2_u256_fn!(state, self::bitwise::byte),
-			Opcode::SHL => op2_u256_fn!(state, self::bitwise::shl),
-			Opcode::SHR => op2_u256_fn!(state, self::bitwise::shr),
-			Opcode::SAR => op2_u256_fn!(state, self::bitwise::sar),
-			Opcode::POP => self::misc::pop(state),
-			Opcode::PC => self::misc::pc(state, pc),
-			Opcode::MSIZE => self::misc::msize(state),
-			Opcode::PUSH1 => self::misc::push(state, 1, pc),
-			Opcode::PUSH2 => self::misc::push(state, 2, pc),
-			Opcode::PUSH3 => self::misc::push(state, 3, pc),
-			Opcode::PUSH4 => self::misc::push(state, 4, pc),
-			Opcode::PUSH5 => self::misc::push(state, 5, pc),
-			Opcode::PUSH6 => self::misc::push(state, 6, pc),
-			Opcode::PUSH7 => self::misc::push(state, 7, pc),
-			Opcode::PUSH8 => self::misc::push(state, 8, pc),
-			Opcode::PUSH9 => self::misc::push(state, 9, pc),
-			Opcode::PUSH10 => self::misc::push(state, 10, pc),
-			Opcode::PUSH11 => self::misc::push(state, 11, pc),
-			Opcode::PUSH12 => self::misc::push(state, 12, pc),
-			Opcode::PUSH13 => self::misc::push(state, 13, pc),
-			Opcode::PUSH14 => self::misc::push(state, 14, pc),
-			Opcode::PUSH15 => self::misc::push(state, 15, pc),
-			Opcode::PUSH16 => self::misc::push(state, 16, pc),
-			Opcode::PUSH17 => self::misc::push(state, 17, pc),
-			Opcode::PUSH18 => self::misc::push(state, 18, pc),
-			Opcode::PUSH19 => self::misc::push(state, 19, pc),
-			Opcode::PUSH20 => self::misc::push(state, 20, pc),
-			Opcode::PUSH21 => self::misc::push(state, 21, pc),
-			Opcode::PUSH22 => self::misc::push(state, 22, pc),
-			Opcode::PUSH23 => self::misc::push(state, 23, pc),
-			Opcode::PUSH24 => self::misc::push(state, 24, pc),
-			Opcode::PUSH25 => self::misc::push(state, 25, pc),
-			Opcode::PUSH26 => self::misc::push(state, 26, pc),
-			Opcode::PUSH27 => self::misc::push(state, 27, pc),
-			Opcode::PUSH28 => self::misc::push(state, 28, pc),
-			Opcode::PUSH29 => self::misc::push(state, 29, pc),
-			Opcode::PUSH30 => self::misc::push(state, 30, pc),
-			Opcode::PUSH31 => self::misc::push(state, 31, pc),
-			Opcode::PUSH32 => self::misc::push(state, 32, pc),
-			Opcode::MOD => op2_u256_fn!(state, self::arithmetic::rem),
-			Opcode::SMOD => op2_u256_fn!(state, self::arithmetic::srem),
-			Opcode::CODESIZE => self::misc::codesize(state),
-			Opcode::CALLDATALOAD => self::misc::calldataload(state),
-			Opcode::CALLDATASIZE => self::misc::calldatasize(state),
-			Opcode::ADDMOD => op3_u256_fn!(state, self::arithmetic::addmod),
-			Opcode::MULMOD => op3_u256_fn!(state, self::arithmetic::mulmod),
-
-			// Instructions with potential exits.
-			Opcode::MLOAD => self::misc::mload(state),
-			Opcode::MSTORE => self::misc::mstore(state),
-			Opcode::MSTORE8 => self::misc::mstore8(state),
-			Opcode::CODECOPY => self::misc::codecopy(state),
-			Opcode::CALLDATACOPY => self::misc::calldatacopy(state),
-			Opcode::DUP1 => self::misc::dup(state, 1),
-			Opcode::DUP2 => self::misc::dup(state, 2),
-			Opcode::DUP3 => self::misc::dup(state, 3),
-			Opcode::DUP4 => self::misc::dup(state, 4),
-			Opcode::DUP5 => self::misc::dup(state, 5),
-			Opcode::DUP6 => self::misc::dup(state, 6),
-			Opcode::DUP7 => self::misc::dup(state, 7),
-			Opcode::DUP8 => self::misc::dup(state, 8),
-			Opcode::DUP9 => self::misc::dup(state, 9),
-			Opcode::DUP10 => self::misc::dup(state, 10),
-			Opcode::DUP11 => self::misc::dup(state, 11),
-			Opcode::DUP12 => self::misc::dup(state, 12),
-			Opcode::DUP13 => self::misc::dup(state, 13),
-			Opcode::DUP14 => self::misc::dup(state, 14),
-			Opcode::DUP15 => self::misc::dup(state, 15),
-			Opcode::DUP16 => self::misc::dup(state, 16),
-			Opcode::SWAP1 => self::misc::swap(state, 1),
-			Opcode::SWAP2 => self::misc::swap(state, 2),
-			Opcode::SWAP3 => self::misc::swap(state, 3),
-			Opcode::SWAP4 => self::misc::swap(state, 4),
-			Opcode::SWAP5 => self::misc::swap(state, 5),
-			Opcode::SWAP6 => self::misc::swap(state, 6),
-			Opcode::SWAP7 => self::misc::swap(state, 7),
-			Opcode::SWAP8 => self::misc::swap(state, 8),
-			Opcode::SWAP9 => self::misc::swap(state, 9),
-			Opcode::SWAP10 => self::misc::swap(state, 10),
-			Opcode::SWAP11 => self::misc::swap(state, 11),
-			Opcode::SWAP12 => self::misc::swap(state, 12),
-			Opcode::SWAP13 => self::misc::swap(state, 13),
-			Opcode::SWAP14 => self::misc::swap(state, 14),
-			Opcode::SWAP15 => self::misc::swap(state, 15),
-			Opcode::SWAP16 => self::misc::swap(state, 16),
-
-			// Control flow instructions.
-			Opcode::RETURN => self::misc::ret(state),
-			Opcode::REVERT => self::misc::revert(state),
-			Opcode::INVALID => Control::Exit(ExitError::DesignatedInvalid.into()),
-			Opcode::STOP => Control::Exit(ExitSucceed::Stopped.into()),
-			Opcode::JUMPDEST => Control::Continue(1),
-			Opcode::JUMP => self::misc::jump(state),
-			Opcode::JUMPI => self::misc::jumpi(state),
-
-			// External opcodes.
-			Opcode(code) => {
-				// Skip external instruction.
-				state.position = Ok(pc + 1);
-				Control::Trap(Opcode(code))
-			}
-		};
-		#[cfg(feature = "tracing")]
-		{
-			use crate::Capture;
-			let result = match &control {
-				Control::Continue(_) | Control::Jump(_) => Ok(()),
-				Control::Trap(t) => Err(Capture::Trap(t)),
-				Control::Exit(e) => Err(Capture::Exit(e)),
-			};
-			handler.after_bytecode(&result, state);
-		}
-		pc = match control {
-			Control::Continue(bytes) => pc + bytes,
-			Control::Jump(pos) => pos,
-			_ => return control,
-		}
-	}
-}
-
-#[inline]
-// #[cfg(not(feature = "match-interpreter"))]
-#[allow(dead_code)]
 fn eval_table<H: InterpreterHandler>(
 	state: &mut Machine,
 	position: usize,
@@ -210,22 +39,12 @@ fn eval_table<H: InterpreterHandler>(
 			Control::Trap(opcode)
 		}
 		let mut table = [eval_external as _; 256];
-		// Ugly due to https://rust-lang.github.io/rfcs/1558-closure-to-fn-coercion.html
-		// not being there.
 		macro_rules! table_elem {
 			($operation:ident, $definition:expr) => {
-				#[allow(non_snake_case)]
-				fn $operation(_state: &mut Machine, _opcode: Opcode, _position: usize) -> Control {
-					$definition
-				}
-				table[Opcode::$operation.as_usize()] = $operation as _;
+				table_elem!($operation, _state, $definition)
 			};
 			($operation:ident, $state:ident, $definition:expr) => {
-				#[allow(non_snake_case)]
-				fn $operation($state: &mut Machine, _opcode: Opcode, _position: usize) -> Control {
-					$definition
-				}
-				table[Opcode::$operation.as_usize()] = $operation as _;
+				table_elem!($operation, $state, _pc, $definition)
 			};
 			($operation:ident, $state:ident, $pc:ident, $definition:expr) => {
 				#[allow(non_snake_case)]

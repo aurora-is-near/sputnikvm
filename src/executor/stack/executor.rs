@@ -958,7 +958,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		}
 
 		if let Some(cost) = gasometer::static_opcode_cost(opcode) {
-			self.state.metadata_mut().gasometer.record_cost(cost as u64)?;
+			self.state
+				.metadata_mut()
+				.gasometer
+				.record_cost(cost as u64)?;
 		} else {
 			let is_static = self.state.metadata().is_static;
 			let (gas_cost, target, memory_cost) = gasometer::dynamic_opcode_cost(
@@ -1218,7 +1221,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		// log::trace!(target: "evm", "Running opcode: {:?}, Pre gas-left: {:?}", opcode, gasometer.gas());
 
 		if let Some(cost) = gasometer::static_opcode_cost(opcode) {
-			self.state.metadata_mut().gasometer.record_cost(cost as u64)?;
+			self.state
+				.metadata_mut()
+				.gasometer
+				.record_cost(cost as u64)?;
 		} else {
 			let is_static = self.state.metadata().is_static;
 			let (gas_cost, target, memory_cost) = gasometer::dynamic_opcode_cost(

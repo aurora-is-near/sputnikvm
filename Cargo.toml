@@ -42,7 +42,6 @@ tracing = [
   "evm-gasometer/tracing",
   "evm-runtime/tracing"
 ]
-match-interpreter = [ "evm-core/match-interpreter" ]
 
 [workspace]
 members = [
