@@ -47,6 +47,10 @@ pub struct Machine {
 
 /// EVM interpreter handler.
 pub trait InterpreterHandler {
+	fn before_eval(&mut self);
+
+	fn after_eval(&mut self);
+
 	fn before_bytecode(
 		&mut self,
 		opcode: Opcode,
@@ -201,6 +205,10 @@ impl SimpleInterpreterHandler {
 }
 
 impl InterpreterHandler for SimpleInterpreterHandler {
+	fn before_eval(&mut self) {}
+
+	fn after_eval(&mut self) {}
+
 	#[inline]
 	fn before_bytecode(
 		&mut self,

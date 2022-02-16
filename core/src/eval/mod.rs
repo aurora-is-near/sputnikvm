@@ -18,14 +18,15 @@ pub enum Control {
 
 #[inline]
 pub fn eval<H: InterpreterHandler>(
-	state: &mut Machine,
+	machine: &mut Machine,
 	position: usize,
 	handler: &mut H,
 	address: &H160,
 ) -> Control {
-	eval_table(state, position, handler, address)
+	eval_table(machine, position, handler, address)
 }
 
+// Table-based interpreter, shows the smallest gas cost.
 #[inline]
 fn eval_table<H: InterpreterHandler>(
 	state: &mut Machine,
@@ -283,6 +284,7 @@ fn eval_table<H: InterpreterHandler>(
 		table
 	};
 	let mut pc = position;
+	handler.before_eval();
 	loop {
 		let op = match state.code.get(pc) {
 			Some(v) => Opcode(*v),
@@ -313,7 +315,10 @@ fn eval_table<H: InterpreterHandler>(
 		pc = match control {
 			Control::Continue(bytes) => pc + bytes,
 			Control::Jump(pos) => pos,
-			_ => return control,
+			_ => {
+				handler.after_eval();
+				return control;
+			}
 		}
 	}
 }

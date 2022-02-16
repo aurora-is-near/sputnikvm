@@ -98,6 +98,12 @@ impl<'config> Gasometer<'config> {
 	}
 
 	#[inline]
+	/// Gas limit.
+	pub fn gas_limit(&self) -> u64 {
+		self.gas_limit
+	}
+
+	#[inline]
 	/// Remaining gas.
 	pub fn gas(&self) -> u64 {
 		match self.inner.as_ref() {
