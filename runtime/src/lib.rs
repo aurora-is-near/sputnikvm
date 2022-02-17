@@ -29,6 +29,7 @@ mod interrupt;
 
 pub use evm_core::*;
 
+pub use crate::eval::system_before_eval;
 pub use crate::context::{CallScheme, Context, CreateScheme};
 pub use crate::handler::{Handler, Transfer};
 pub use crate::interrupt::{Resolve, ResolveCall, ResolveCreate};

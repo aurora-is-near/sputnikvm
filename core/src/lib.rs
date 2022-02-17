@@ -1,14 +1,14 @@
 //! Core layer for EVM.
 
 #![deny(warnings)]
-#![forbid(unsafe_code, unused_variables, unused_imports)]
+#![forbid(unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
 extern crate core;
 
 mod error;
-mod eval;
+pub mod eval;
 mod memory;
 mod opcode;
 mod stack;
@@ -47,7 +47,7 @@ pub struct Machine {
 
 /// EVM interpreter handler.
 pub trait InterpreterHandler {
-	fn before_eval(&mut self);
+	fn before_eval(&mut self, table: &mut [fn(_: &mut Machine, _: Opcode, _: usize, _: *mut u8) -> Control; 256]);
 
 	fn after_eval(&mut self);
 
@@ -205,7 +205,7 @@ impl SimpleInterpreterHandler {
 }
 
 impl InterpreterHandler for SimpleInterpreterHandler {
-	fn before_eval(&mut self) {}
+	fn before_eval(&mut self, _: &mut [fn(_: &mut Machine, _: Opcode, _: usize, _: *mut u8) -> Control; 256]) {}
 
 	fn after_eval(&mut self) {}
 

@@ -6,6 +6,7 @@ mod misc;
 
 use crate::{ExitError, ExitReason, ExitSucceed, InterpreterHandler, Machine, Opcode};
 use core::ops::{BitAnd, BitOr, BitXor};
+use std::mem;
 use primitive_types::{H160, U256};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -28,28 +29,31 @@ pub fn eval<H: InterpreterHandler>(
 
 // Table-based interpreter, shows the smallest gas cost.
 #[inline]
-fn eval_table<H: InterpreterHandler>(
+fn eval_table<H: InterpreterHandler + Sized>(
 	state: &mut Machine,
 	position: usize,
 	handler: &mut H,
 	address: &H160,
 ) -> Control {
-	static TABLE: [fn(state: &mut Machine, opcode: Opcode, position: usize) -> Control; 256] = {
-		fn eval_external(state: &mut Machine, opcode: Opcode, position: usize) -> Control {
+	static TABLE: [fn(state: &mut Machine, opcode: Opcode, position: usize, handler: *mut u8) -> Control; 256] = {
+		fn eval_external(state: &mut Machine, opcode: Opcode, position: usize, _handler: *mut u8) -> Control {
 			state.position = Ok(position + 1);
 			Control::Trap(opcode)
 		}
 		let mut table = [eval_external as _; 256];
 		macro_rules! table_elem {
 			($operation:ident, $definition:expr) => {
-				table_elem!($operation, _state, $definition)
+				table_elem!($operation, _state, _hander, $definition)
 			};
 			($operation:ident, $state:ident, $definition:expr) => {
-				table_elem!($operation, $state, _pc, $definition)
+				table_elem!($operation, $state, _pc, _hander, $definition)
 			};
 			($operation:ident, $state:ident, $pc:ident, $definition:expr) => {
+				table_elem!($operation, $state, $pc, _handler, $definition)
+			};
+			($operation:ident, $state:ident, $pc:ident, $handler:ident, $definition:expr) => {
 				#[allow(non_snake_case)]
-				fn $operation($state: &mut Machine, _opcode: Opcode, $pc: usize) -> Control {
+				fn $operation($state: &mut Machine, _opcode: Opcode, $pc: usize, $handler: *mut u8) -> Control {
 					$definition
 				}
 				table[Opcode::$operation.as_usize()] = $operation as _;
@@ -284,7 +288,11 @@ fn eval_table<H: InterpreterHandler>(
 		table
 	};
 	let mut pc = position;
-	handler.before_eval();
+	let mut table = TABLE;
+	let handler_u8: *mut u8 = unsafe {
+		mem::transmute::<&mut H, *mut u8>(handler)
+	};
+	handler.before_eval(&mut table);
 	loop {
 		let op = match state.code.get(pc) {
 			Some(v) => Opcode(*v),
@@ -300,7 +308,8 @@ fn eval_table<H: InterpreterHandler>(
 				return Control::Exit(ExitReason::Error(e));
 			}
 		};
-		let control = TABLE[op.as_usize()](state, op, pc);
+		// TODO: properly type handler.
+		let control = table[op.as_usize()](state, op, pc, handler_u8);
 
 		#[cfg(feature = "tracing")]
 		{

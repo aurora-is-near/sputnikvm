@@ -14,6 +14,7 @@ use ethereum::Log;
 use evm_core::{ExitFatal, ExitRevert, InterpreterHandler, Machine, Trap};
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
+use evm_runtime::system_before_eval;
 
 macro_rules! emit_exit {
 	($reason:expr) => {{
@@ -935,8 +936,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> InterpreterHandler
 	for StackExecutor<'config, 'precompiles, S, P>
 {
-	#[inline]
-	fn before_eval(&mut self) {}
+	fn before_eval(&mut self, table: &mut [fn(_: &mut Machine, _: Opcode, _: usize, _: *mut u8) -> evm_core::eval::Control; 256]) {
+		system_before_eval(table);
+	}
 
 	#[inline]
 	fn after_eval(&mut self) {}
