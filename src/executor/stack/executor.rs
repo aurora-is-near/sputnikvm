@@ -311,10 +311,6 @@ pub struct StackExecutor<'config, 'precompiles, S, P> {
 	config: &'config Config,
 	state: S,
 	precompile_set: &'precompiles P,
-
-	// Fast gas metering.
-	total_used_gas: u64,
-	gas_limit: u64,
 }
 
 impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
@@ -340,8 +336,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			config,
 			state,
 			precompile_set,
-			total_used_gas: 0,
-			gas_limit: 0,
 		}
 	}
 
@@ -942,22 +936,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 	for StackExecutor<'config, 'precompiles, S, P>
 {
 	#[inline]
-	fn before_eval(&mut self) {
-		self.total_used_gas = self.state.metadata_mut().gasometer.total_used_gas();
-		self.gas_limit = self.state.metadata_mut().gasometer.gas_limit();
-	}
+	fn before_eval(&mut self) {}
 
 	#[inline]
-	fn after_eval(&mut self) {
-		let newly_used = self.total_used_gas - self.state.metadata().gasometer.total_used_gas();
-		self.state
-			.metadata_mut()
-			.gasometer
-			.record_cost(newly_used)
-			.unwrap();
-		self.total_used_gas = 0;
-		self.gas_limit = 0;
-	}
+	fn after_eval(&mut self) {}
 
 	#[inline]
 	fn before_bytecode(
@@ -982,12 +964,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		}
 
 		if let Some(cost) = gasometer::static_opcode_cost(opcode) {
-			let new_used_gas = self.total_used_gas + (cost as u64);
-			if new_used_gas >= self.gas_limit {
-				self.total_used_gas = self.gas_limit;
-				return Err(ExitError::OutOfGas);
-			}
-			self.total_used_gas = new_used_gas;
+			self.state
+				.metadata_mut()
+				.gasometer
+				.record_cost(cost as u64)?;
 		} else {
 			let is_static = self.state.metadata().is_static;
 			let (gas_cost, target, memory_cost) = gasometer::dynamic_opcode_cost(
@@ -999,13 +979,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 				self,
 			)?;
 
-			// Sync gasometer with gas counter cache by recording currently added diff.
-			let newly_used = self.total_used_gas - self.state.metadata().gasometer.total_used_gas();
-			self.state
-				.metadata_mut()
-				.gasometer
-				.record_cost(newly_used)
-				.unwrap();
 			self.state
 				.metadata_mut()
 				.gasometer
@@ -1019,8 +992,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 				}
 				StorageTarget::None => (),
 			}
-			// Read new total value to the gas counter cache.
-			self.total_used_gas = self.state.metadata_mut().gasometer.total_used_gas();
 		}
 		Ok(())
 	}
