@@ -35,7 +35,7 @@ pub use crate::interrupt::{Resolve, ResolveCall, ResolveCreate};
 
 use alloc::rc::Rc;
 use alloc::vec::Vec;
-use primitive_types::{H160, U256};
+use primitive_types::H160;
 
 macro_rules! step {
 	( $self:expr, $handler:expr, $return:tt $($err:path)?; $($ok:path)? ) => ({
@@ -79,8 +79,8 @@ pub struct Runtime<'config> {
 	machine: Machine,
 	status: Result<(), ExitReason>,
 	return_data_buffer: Vec<u8>,
-	return_data_len: U256,
-	return_dat_offset: U256,
+	return_data_len: usize,
+	return_dat_offset: usize,
 	context: Context,
 	_config: &'config Config,
 }
@@ -97,8 +97,8 @@ impl<'config> Runtime<'config> {
 			machine: Machine::new(code, data, config.stack_limit, config.memory_limit),
 			status: Ok(()),
 			return_data_buffer: Vec::new(),
-			return_data_len: U256::zero(),
-			return_dat_offset: U256::zero(),
+			return_data_len: 0,
+			return_dat_offset: 0,
 			context,
 			_config: config,
 		}
