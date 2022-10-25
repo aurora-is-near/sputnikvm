@@ -3,6 +3,9 @@ mod macros;
 mod system;
 
 use crate::{CallScheme, ExitReason, Handler, Opcode, Runtime};
+use alloc::vec::Vec;
+use core::cmp::min;
+use primitive_types::{H160, H256, U256};
 
 pub enum Control<H: Handler> {
 	Continue,
@@ -57,5 +60,90 @@ pub fn eval<H: Handler>(state: &mut Runtime, opcode: Opcode, handler: &mut H) ->
 		Opcode::CHAINID => system::chainid(state, handler),
 		Opcode::BASEFEE => system::base_fee(state, handler),
 		_ => handle_other(state, opcode, handler),
+	}
+}
+
+pub fn finish_create(
+	runtime: &mut Runtime,
+	reason: ExitReason,
+	address: Option<H160>,
+	return_data: Vec<u8>,
+) -> Result<(), ExitReason> {
+	runtime.return_data_buffer = return_data;
+	let create_address: H256 = address.map(|a| a.into()).unwrap_or_default();
+
+	match reason {
+		ExitReason::Succeed(_) => {
+			runtime
+				.machine
+				.stack_mut()
+				.push(U256::from_big_endian(&create_address[..]))?;
+			Ok(())
+		}
+		ExitReason::Revert(_) => {
+			runtime.machine.stack_mut().push(U256::zero())?;
+			Ok(())
+		}
+		ExitReason::Error(_) => {
+			runtime.machine.stack_mut().push(U256::zero())?;
+			Ok(())
+		}
+		ExitReason::Fatal(e) => {
+			runtime.machine.stack_mut().push(U256::zero())?;
+			Err(e.into())
+		}
+	}
+}
+
+pub fn finish_call(
+	runtime: &mut Runtime,
+	out_len: U256,
+	out_offset: U256,
+	reason: ExitReason,
+	return_data: Vec<u8>,
+) -> Result<(), ExitReason> {
+	runtime.return_data_buffer = return_data;
+	let target_len = min(out_len, U256::from(runtime.return_data_buffer.len()));
+
+	match reason {
+		ExitReason::Succeed(_) => {
+			match runtime.machine.memory_mut().copy_large(
+				out_offset,
+				U256::zero(),
+				target_len,
+				&runtime.return_data_buffer[..],
+			) {
+				Ok(()) => {
+					runtime.machine.stack_mut().push(U256::one())?;
+					Ok(())
+				}
+				Err(_) => {
+					runtime.machine.stack_mut().push(U256::zero())?;
+					Ok(())
+				}
+			}
+		}
+		ExitReason::Revert(_) => {
+			runtime.machine.stack_mut().push(U256::zero())?;
+
+			let _ = runtime.machine.memory_mut().copy_large(
+				out_offset,
+				U256::zero(),
+				target_len,
+				&runtime.return_data_buffer[..],
+			);
+
+			Ok(())
+		}
+		ExitReason::Error(_) => {
+			runtime.machine.stack_mut().push(U256::zero())?;
+
+			Ok(())
+		}
+		ExitReason::Fatal(e) => {
+			runtime.machine.stack_mut().push(U256::zero())?;
+
+			Err(e.into())
+		}
 	}
 }
