@@ -494,7 +494,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				}
 				RuntimeKind::Execute => (reason, None, runtime.inner.machine().return_value()),
 			};
-			emit_exit!(&reason, &return_data);
 			// We're done with that runtime now, so can pop it off the call stack
 			call_stack.pop();
 			// Now pass the results from that runtime on to the next one in the stack
@@ -502,6 +501,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				Some(r) => r,
 				None => return (reason, None, return_data),
 			};
+			emit_exit!(&reason, &return_data);
 			let inner_runtime = &mut runtime.inner;
 			let maybe_error = match runtime_kind {
 				RuntimeKind::Create(_) => {
