@@ -501,6 +501,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				Some(r) => r,
 				None => return (reason, None, return_data),
 			};
+			emit_exit!(&reason, &return_data);
 			let inner_runtime = &mut runtime.inner;
 			let maybe_error = match runtime_kind {
 				RuntimeKind::Create(_) => {
@@ -999,7 +1000,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		return_data: Vec<u8>,
 	) -> (ExitReason, Option<H160>, Vec<u8>) {
 		fn check_first_byte(config: &Config, code: &[u8]) -> Result<(), ExitError> {
-			if config.disallow_executable_format && Some(&Opcode::EOFMAGIC.as_u8()) == code.get(0) {
+			if config.disallow_executable_format && Some(&Opcode::EOFMAGIC.as_u8()) == code.first()
+			{
 				return Err(ExitError::InvalidCode(Opcode::EOFMAGIC));
 			}
 			Ok(())
@@ -1418,7 +1420,7 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 		// We record the length of the input.
 		let memory_cost = Some(crate::gasometer::MemoryCost {
 			offset: 0,
-			len: input.len().into(),
+			len: input.len(),
 		});
 
 		if let Err(error) = self
@@ -1461,7 +1463,7 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 				call_stack.push(rt.0);
 				let (reason, _, return_data) =
 					self.executor.execute_with_call_stack(&mut call_stack);
-				(reason, return_data)
+				emit_exit!(reason, return_data)
 			}
 		}
 	}
