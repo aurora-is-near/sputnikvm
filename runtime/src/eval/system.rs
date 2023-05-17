@@ -198,6 +198,15 @@ pub fn difficulty<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> 
 	Control::Continue
 }
 
+pub fn prevrandao<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
+	if let Some(rand) = handler.block_randomness() {
+		push_h256!(runtime, rand);
+		Control::Continue
+	} else {
+		difficulty(runtime, handler)
+	}
+}
+
 pub fn gaslimit<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 	push_u256!(runtime, handler.block_gas_limit());
 	Control::Continue
@@ -427,7 +436,7 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 		}
 		Capture::Trap(interrupt) => {
 			runtime.return_data_len = out_len;
-			runtime.return_dat_offset = out_offset;
+			runtime.return_data_offset = out_offset;
 			Control::CallInterrupt(interrupt)
 		}
 	}

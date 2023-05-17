@@ -54,6 +54,8 @@ pub trait Handler {
 	fn block_timestamp(&self) -> U256;
 	/// Get environmental block difficulty.
 	fn block_difficulty(&self) -> U256;
+	/// Get environmental block randomness.
+	fn block_randomness(&self) -> Option<H256>;
 	/// Get environmental gas limit.
 	fn block_gas_limit(&self) -> U256;
 	/// Environmental block base fee.
@@ -71,7 +73,7 @@ pub trait Handler {
 	/// References:
 	/// * <https://eips.ethereum.org/EIPS/eip-2929>
 	/// * <https://eips.ethereum.org/EIPS/eip-2930>
-	fn is_cold(&self, address: H160, index: Option<H256>) -> bool;
+	fn is_cold(&mut self, address: H160, index: Option<H256>) -> Result<bool, ExitError>;
 
 	/// Set storage value of address at index.
 	fn set_storage(&mut self, address: H160, index: H256, value: H256) -> Result<(), ExitError>;

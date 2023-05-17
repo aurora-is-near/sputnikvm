@@ -5,7 +5,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
-extern crate core;
 
 mod error;
 mod eval;
@@ -193,8 +192,10 @@ impl SimpleInterpreterHandler {
 			address,
 		}
 	}
+}
 
-	pub fn default() -> Self {
+impl Default for SimpleInterpreterHandler {
+	fn default() -> Self {
 		Self {
 			executed: 0,
 			profile: [0; 256],

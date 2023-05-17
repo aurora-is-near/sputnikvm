@@ -1,18 +1,17 @@
 use crate::backend::Backend;
+use crate::executor::stack::precompile::{
+	IsPrecompileResult, PrecompileFailure, PrecompileHandle, PrecompileOutput, PrecompileSet,
+};
 use crate::executor::stack::tagged_runtime::{RuntimeKind, TaggedRuntime};
 use crate::gasometer::{self, Gasometer, StorageTarget};
 use crate::maybe_borrowed::MaybeBorrowed;
 use crate::{
-	Capture, Config, Context, CreateScheme, ExitError, ExitReason, ExitSucceed, Handler, Opcode,
-	Runtime, Transfer,
+	Capture, Config, Context, CreateScheme, ExitError, ExitReason, Handler, Opcode, Runtime,
+	Transfer,
 };
-use alloc::{
-	collections::{BTreeMap, BTreeSet},
-	rc::Rc,
-	vec::Vec,
-};
+use alloc::{collections::BTreeSet, rc::Rc, vec::Vec};
 use core::{cmp::min, convert::Infallible};
-use evm_core::{ExitFatal, ExitRevert, InterpreterHandler, Machine, Trap};
+use evm_core::{ExitFatal, InterpreterHandler, Machine, Trap};
 use evm_runtime::Resolve;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
@@ -205,7 +204,7 @@ pub trait StackState<'config>: Backend {
 	fn is_cold(&self, address: H160) -> bool;
 	fn is_storage_cold(&self, address: H160, key: H256) -> bool;
 
-	fn inc_nonce(&mut self, address: H160);
+	fn inc_nonce(&mut self, address: H160) -> Result<(), ExitError>;
 	fn set_storage(&mut self, address: H160, key: H256, value: H256);
 	fn reset_storage(&mut self, address: H160);
 	fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>);
@@ -228,139 +227,7 @@ pub trait StackState<'config>: Backend {
 	/// can be customized to use a more performant approach that don't need to
 	/// fetch the code.
 	fn code_hash(&self, address: H160) -> H256 {
-		H256::from_slice(Keccak256::digest(&self.code(address)).as_slice())
-	}
-}
-
-/// Data returned by a precompile on success.
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct PrecompileOutput {
-	pub exit_status: ExitSucceed,
-	pub output: Vec<u8>,
-}
-
-/// Data returned by a precompile in case of failure.
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum PrecompileFailure {
-	/// Reverts the state changes and consume all the gas.
-	Error { exit_status: ExitError },
-	/// Reverts the state changes.
-	/// Returns the provided error message.
-	Revert {
-		exit_status: ExitRevert,
-		output: Vec<u8>,
-	},
-	/// Mark this failure as fatal, and all EVM execution stacks must be exited.
-	Fatal { exit_status: ExitFatal },
-}
-
-impl From<ExitError> for PrecompileFailure {
-	fn from(error: ExitError) -> PrecompileFailure {
-		PrecompileFailure::Error { exit_status: error }
-	}
-}
-
-/// Handle provided to a precompile to interact with the EVM.
-pub trait PrecompileHandle {
-	/// Perform subcall in provided context.
-	/// Precompile specifies in which context the subcall is executed.
-	fn call(
-		&mut self,
-		to: H160,
-		transfer: Option<Transfer>,
-		input: Vec<u8>,
-		gas_limit: Option<u64>,
-		is_static: bool,
-		context: &Context,
-	) -> (ExitReason, Vec<u8>);
-
-	/// Record cost to the Runtime gasometer.
-	fn record_cost(&mut self, cost: u64) -> Result<(), ExitError>;
-
-	/// Retreive the remaining gas.
-	fn remaining_gas(&self) -> u64;
-
-	/// Record a log.
-	fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) -> Result<(), ExitError>;
-
-	/// Retreive the code address (what is the address of the precompile being called).
-	fn code_address(&self) -> H160;
-
-	/// Retreive the input data the precompile is called with.
-	fn input(&self) -> &[u8];
-
-	/// Retreive the context in which the precompile is executed.
-	fn context(&self) -> &Context;
-
-	/// Is the precompile call is done statically.
-	fn is_static(&self) -> bool;
-
-	/// Retreive the gas limit of this call.
-	fn gas_limit(&self) -> Option<u64>;
-}
-
-/// A precompile result.
-pub type PrecompileResult = Result<PrecompileOutput, PrecompileFailure>;
-
-/// A set of precompiles.
-/// Checks of the provided address being in the precompile set should be
-/// as cheap as possible since it may be called often.
-pub trait PrecompileSet {
-	/// Tries to execute a precompile in the precompile set.
-	/// If the provided address is not a precompile, returns None.
-	fn execute(&self, handle: &mut impl PrecompileHandle) -> Option<PrecompileResult>;
-
-	/// Check if the given address is a precompile. Should only be called to
-	/// perform the check while not executing the precompile afterward, since
-	/// `execute` already performs a check internally.
-	fn is_precompile(&self, address: H160) -> bool;
-}
-
-impl PrecompileSet for () {
-	fn execute(&self, _: &mut impl PrecompileHandle) -> Option<PrecompileResult> {
-		None
-	}
-
-	fn is_precompile(&self, _: H160) -> bool {
-		false
-	}
-}
-
-/// Precompiles function signature. Expected input arguments are:
-///  * Input
-///  * Gas limit
-///  * Context
-///  * Is static
-///
-/// In case of success returns the output and the cost.
-pub type PrecompileFn =
-	fn(&[u8], Option<u64>, &Context, bool) -> Result<(PrecompileOutput, u64), PrecompileFailure>;
-
-impl PrecompileSet for BTreeMap<H160, PrecompileFn> {
-	fn execute(&self, handle: &mut impl PrecompileHandle) -> Option<PrecompileResult> {
-		let address = handle.code_address();
-
-		self.get(&address).map(|precompile| {
-			let input = handle.input();
-			let gas_limit = handle.gas_limit();
-			let context = handle.context();
-			let is_static = handle.is_static();
-
-			match (*precompile)(input, gas_limit, context, is_static) {
-				Ok((output, cost)) => {
-					handle.record_cost(cost)?;
-					Ok(output)
-				}
-				Err(err) => Err(err),
-			}
-		})
-	}
-
-	/// Check if the given address is a precompile. Should only be called to
-	/// perform the check while not executing the precompile afterward, since
-	/// `execute` already performs a check internally.
-	fn is_precompile(&self, address: H160) -> bool {
-		self.contains_key(&address)
+		H256::from_slice(Keccak256::digest(self.code(address)).as_slice())
 	}
 }
 
@@ -424,7 +291,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	}
 
 	/// Execute the runtime until it returns.
-	pub fn execute(&mut self, runtime: &mut Runtime<'config>) -> ExitReason {
+	pub fn execute(&mut self, runtime: &mut Runtime) -> ExitReason {
 		let mut call_stack = Vec::with_capacity(DEFAULT_CALL_STACK_CAPACITY);
 		call_stack.push(TaggedRuntime {
 			kind: RuntimeKind::Execute,
@@ -435,9 +302,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	}
 
 	/// Execute using Runtimes on the call_stack until it returns.
-	fn execute_with_call_stack<'borrow>(
+	fn execute_with_call_stack(
 		&mut self,
-		call_stack: &mut Vec<TaggedRuntime<'config, 'borrow>>,
+		call_stack: &mut Vec<TaggedRuntime<'_>>,
 	) -> (ExitReason, Option<H160>, Vec<u8>) {
 		// This `interrupt_runtime` is used to pass the runtime obtained from the
 		// `Capture::Trap` branch in the match below back to the top of the call stack.
@@ -532,6 +399,22 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gasometer.record_transaction(transaction_cost)
 	}
 
+	fn maybe_record_init_code_cost(&mut self, init_code: &[u8]) -> Result<(), ExitError> {
+		if let Some(limit) = self.config.max_initcode_size {
+			// EIP-3860
+			if init_code.len() > limit {
+				self.state.metadata_mut().gasometer.fail();
+				return Err(ExitError::CreateContractLimit);
+			}
+			return self
+				.state
+				.metadata_mut()
+				.gasometer
+				.record_cost(gasometer::init_code_cost(init_code));
+		}
+		Ok(())
+	}
+
 	/// Execute a `CREATE` transaction.
 	pub fn transact_create(
 		&mut self,
@@ -548,6 +431,14 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			gas_limit,
 			address: self.create_address(CreateScheme::Legacy { caller }),
 		});
+
+		if let Some(limit) = self.config.max_initcode_size {
+			if init_code.len() > limit {
+				self.state.metadata_mut().gasometer.fail();
+				let _ = self.exit_substate(StackExitKind::Failed);
+				return emit_exit!(ExitError::CreateContractLimit.into(), Vec::new());
+			}
+		}
 
 		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
 			return emit_exit!(e.into(), Vec::new());
@@ -582,6 +473,14 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
+		if let Some(limit) = self.config.max_initcode_size {
+			if init_code.len() > limit {
+				self.state.metadata_mut().gasometer.fail();
+				let _ = self.exit_substate(StackExitKind::Failed);
+				return emit_exit!(ExitError::CreateContractLimit.into(), Vec::new());
+			}
+		}
+
 		let code_hash = H256::from_slice(Keccak256::digest(&init_code).as_slice());
 		event!(TransactCreate2 {
 			caller,
@@ -655,13 +554,23 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		// Initialize initial addresses for EIP-2929
 		if self.config.increase_state_access_gas {
-			let addresses = core::iter::once(caller).chain(core::iter::once(address));
-			self.state.metadata_mut().access_addresses(addresses);
+			if self.config.warm_coinbase_address {
+				// Warm coinbase address for EIP-3651
+				let addresses = core::iter::once(caller)
+					.chain(core::iter::once(address))
+					.chain(core::iter::once(self.block_coinbase()));
+				self.state.metadata_mut().access_addresses(addresses);
+			} else {
+				let addresses = core::iter::once(caller).chain(core::iter::once(address));
+				self.state.metadata_mut().access_addresses(addresses);
+			}
 
 			self.initialize_with_access_list(access_list);
 		}
 
-		self.state.inc_nonce(caller);
+		if let Err(e) = self.state.inc_nonce(caller) {
+			return (e.into(), Vec::new());
+		}
 
 		let context = Context {
 			caller,
@@ -709,7 +618,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	}
 
 	/// Get account nonce.
-	pub fn nonce(&self, address: H160) -> U256 {
+	pub fn nonce(&self, address: H160) -> u64 {
 		self.state.basic(address).nonce
 	}
 
@@ -722,7 +631,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				salt,
 			} => {
 				let mut hasher = Keccak256::new();
-				hasher.update(&[0xff]);
+				hasher.update([0xff]);
 				hasher.update(&caller[..]);
 				hasher.update(&salt[..]);
 				hasher.update(&code_hash[..]);
@@ -757,7 +666,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		init_code: Vec<u8>,
 		target_gas: Option<u64>,
 		take_l64: bool,
-	) -> Capture<(ExitReason, Option<H160>, Vec<u8>), StackExecutorCreateInterrupt<'config>> {
+	) -> Capture<(ExitReason, Option<H160>, Vec<u8>), StackExecutorCreateInterrupt<'static>> {
 		macro_rules! try_or_fail {
 			( $e:expr ) => {
 				match $e {
@@ -795,6 +704,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()));
 		}
 
+		if let Err(e) = self.state.inc_nonce(caller) {
+			return Capture::Exit((e.into(), None, Vec::new()));
+		}
+
 		let after_gas = if take_l64 && self.config.call_l64_after_gas {
 			if self.config.estimate {
 				let initial_after_gas = self.state.metadata().gasometer.gas();
@@ -813,8 +726,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let gas_limit = min(after_gas, target_gas);
 		try_or_fail!(self.state.metadata_mut().gasometer.record_cost(gas_limit));
 
-		self.state.inc_nonce(caller);
-
 		self.enter_substate(gas_limit, false);
 
 		{
@@ -823,7 +734,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()));
 			}
 
-			if self.nonce(address) > U256::zero() {
+			if self.nonce(address) > 0 {
 				let _ = self.exit_substate(StackExitKind::Failed);
 				return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()));
 			}
@@ -850,14 +761,17 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 
 		if self.config.create_increase_nonce {
-			self.state.inc_nonce(address);
+			if let Err(e) = self.state.inc_nonce(address) {
+				return Capture::Exit((e.into(), None, Vec::new()));
+			}
 		}
 
 		let runtime = Runtime::new(
 			Rc::new(init_code),
 			Rc::new(Vec::new()),
 			context,
-			self.config,
+			self.config.stack_limit,
+			self.config.memory_limit,
 		);
 
 		Capture::Trap(StackExecutorCreateInterrupt(TaggedRuntime {
@@ -877,7 +791,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		take_l64: bool,
 		take_stipend: bool,
 		context: Context,
-	) -> Capture<(ExitReason, Vec<u8>), StackExecutorCallInterrupt<'config>> {
+	) -> Capture<(ExitReason, Vec<u8>), StackExecutorCallInterrupt<'static>> {
 		macro_rules! try_or_fail {
 			( $e:expr ) => {
 				match $e {
@@ -985,7 +899,13 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			};
 		}
 
-		let runtime = Runtime::new(Rc::new(code), Rc::new(input), context, self.config);
+		let runtime = Runtime::new(
+			Rc::new(code),
+			Rc::new(input),
+			context,
+			self.config.stack_limit,
+			self.config.memory_limit,
+		);
 
 		Capture::Trap(StackExecutorCallInterrupt(TaggedRuntime {
 			kind: RuntimeKind::Call(code_address),
@@ -1181,15 +1101,15 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 	}
 }
 
-pub struct StackExecutorCallInterrupt<'config>(TaggedRuntime<'config, 'config>);
-pub struct StackExecutorCreateInterrupt<'config>(TaggedRuntime<'config, 'config>);
+pub struct StackExecutorCallInterrupt<'borrow>(TaggedRuntime<'borrow>);
+pub struct StackExecutorCreateInterrupt<'borrow>(TaggedRuntime<'borrow>);
 
 impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	for StackExecutor<'config, 'precompiles, S, P>
 {
-	type CreateInterrupt = StackExecutorCreateInterrupt<'config>;
+	type CreateInterrupt = StackExecutorCreateInterrupt<'static>;
 	type CreateFeedback = Infallible;
-	type CallInterrupt = StackExecutorCallInterrupt<'config>;
+	type CallInterrupt = StackExecutorCallInterrupt<'static>;
 	type CallFeedback = Infallible;
 
 	fn balance(&self, address: H160) -> U256 {
@@ -1222,6 +1142,40 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 			.unwrap_or_default()
 	}
 
+	fn exists(&self, address: H160) -> bool {
+		if self.config.empty_considered_exists {
+			self.state.exists(address)
+		} else {
+			self.state.exists(address) && !self.state.is_empty(address)
+		}
+	}
+
+	fn is_cold(&mut self, address: H160, maybe_index: Option<H256>) -> Result<bool, ExitError> {
+		Ok(match maybe_index {
+			None => {
+				let is_precompile = match self
+					.precompile_set
+					.is_precompile(address, self.state.metadata().gasometer.gas())
+				{
+					IsPrecompileResult::Answer {
+						is_precompile,
+						extra_cost,
+					} => {
+						self.state
+							.metadata_mut()
+							.gasometer
+							.record_cost(extra_cost)?;
+						is_precompile
+					}
+					IsPrecompileResult::OutOfGas => return Err(ExitError::OutOfGas),
+				};
+
+				!is_precompile && self.state.is_cold(address)
+			}
+			Some(index) => self.state.is_storage_cold(address, index),
+		})
+	}
+
 	fn gas_left(&self) -> U256 {
 		U256::from(self.state.metadata().gasometer.gas())
 	}
@@ -1249,6 +1203,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	fn block_difficulty(&self) -> U256 {
 		self.state.block_difficulty()
 	}
+	fn block_randomness(&self) -> Option<H256> {
+		self.state.block_randomness()
+	}
 	fn block_gas_limit(&self) -> U256 {
 		self.state.block_gas_limit()
 	}
@@ -1258,22 +1215,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	fn chain_id(&self) -> U256 {
 		self.state.chain_id()
 	}
-	fn exists(&self, address: H160) -> bool {
-		if self.config.empty_considered_exists {
-			self.state.exists(address)
-		} else {
-			self.state.exists(address) && !self.state.is_empty(address)
-		}
-	}
 	fn deleted(&self, address: H160) -> bool {
 		self.state.deleted(address)
-	}
-
-	fn is_cold(&self, address: H160, maybe_index: Option<H256>) -> bool {
-		match maybe_index {
-			None => !self.precompile_set.is_precompile(address) && self.state.is_cold(address),
-			Some(index) => self.state.is_storage_cold(address, index),
-		}
 	}
 
 	fn set_storage(&mut self, address: H160, index: H256, value: H256) -> Result<(), ExitError> {
@@ -1315,6 +1258,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		init_code: Vec<u8>,
 		target_gas: Option<u64>,
 	) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
+		if let Err(e) = self.maybe_record_init_code_cost(&init_code) {
+			let reason: ExitReason = e.into();
+			emit_exit!(reason.clone());
+			return Capture::Exit((reason, None, Vec::new()));
+		}
+
 		self.create_inner(caller, scheme, value, init_code, target_gas, true)
 	}
 
@@ -1327,6 +1276,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		init_code: Vec<u8>,
 		target_gas: Option<u64>,
 	) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
+		if let Err(e) = self.maybe_record_init_code_cost(&init_code) {
+			let reason: ExitReason = e.into();
+			emit_exit!(reason.clone());
+			return Capture::Exit((reason, None, Vec::new()));
+		}
+
 		let capture = self.create_inner(caller, scheme, value, init_code, target_gas, true);
 
 		if let Capture::Exit((ref reason, _, ref return_value)) = capture {
@@ -1414,10 +1369,15 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 		// Since we don't go through opcodes we need manually record the call
 		// cost. Not doing so will make the code panic as recording the call stipend
 		// will do an underflow.
+		let target_is_cold = match self.executor.is_cold(code_address, None) {
+			Ok(x) => x,
+			Err(err) => return (ExitReason::Error(err), Vec::new()),
+		};
+
 		let gas_cost = crate::gasometer::GasCost::Call {
 			value: transfer.clone().map(|x| x.value).unwrap_or_else(U256::zero),
 			gas: U256::from(gas_limit.unwrap_or(u64::MAX)),
-			target_is_cold: self.executor.is_cold(code_address, None),
+			target_is_cold,
 			target_exists: self.executor.exists(code_address),
 		};
 

@@ -20,7 +20,7 @@ pub struct Basic {
 	/// Account balance.
 	pub balance: U256,
 	/// Account nonce.
-	pub nonce: U256,
+	pub nonce: u64,
 }
 
 pub use ethereum::Log;
@@ -66,6 +66,8 @@ pub trait Backend {
 	fn block_timestamp(&self) -> U256;
 	/// Environmental block difficulty.
 	fn block_difficulty(&self) -> U256;
+	/// Get environmental block randomness.
+	fn block_randomness(&self) -> Option<H256>;
 	/// Environmental block gas limit.
 	fn block_gas_limit(&self) -> U256;
 	/// Environmental block base fee.

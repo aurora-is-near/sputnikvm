@@ -31,6 +31,11 @@ pub struct MemoryVicinity {
 	pub block_gas_limit: U256,
 	/// Environmental base fee per gas.
 	pub block_base_fee_per_gas: U256,
+	/// Environmental randomness.
+	///
+	/// In Ethereum, this is the randomness beacon provided by the beacon
+	/// chain and is only enabled post Merge.
+	pub block_randomness: Option<H256>,
 }
 
 /// Account information of a memory backend.
@@ -42,7 +47,7 @@ pub struct MemoryVicinity {
 #[cfg_attr(feature = "with-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MemoryAccount {
 	/// Account nonce.
-	pub nonce: U256,
+	pub nonce: u64,
 	/// Account balance.
 	pub balance: U256,
 	/// Full account storage.
@@ -109,6 +114,9 @@ impl<'vicinity> Backend for MemoryBackend<'vicinity> {
 	}
 	fn block_difficulty(&self) -> U256 {
 		self.vicinity.block_difficulty
+	}
+	fn block_randomness(&self) -> Option<H256> {
+		self.vicinity.block_randomness
 	}
 	fn block_gas_limit(&self) -> U256 {
 		self.vicinity.block_gas_limit
@@ -202,8 +210,7 @@ impl<'vicinity> ApplyBackend for MemoryBackend<'vicinity> {
 						}
 
 						account.balance == U256::zero()
-							&& account.nonce == U256::zero()
-							&& account.code.is_empty()
+							&& account.nonce == 0 && account.code.is_empty()
 					};
 
 					if is_empty && delete_empty {

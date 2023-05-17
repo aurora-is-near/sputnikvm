@@ -266,12 +266,17 @@ impl<'config> Gasometer<'config> {
 				non_zero_data_len,
 				access_list_address_len,
 				access_list_storage_len,
+				initcode_cost,
 			} => {
-				self.config.gas_transaction_create
+				let mut cost = self.config.gas_transaction_create
 					+ zero_data_len as u64 * self.config.gas_transaction_zero_data
 					+ non_zero_data_len as u64 * self.config.gas_transaction_non_zero_data
 					+ access_list_address_len as u64 * self.config.gas_access_list_address
-					+ access_list_storage_len as u64 * self.config.gas_access_list_storage_key
+					+ access_list_storage_len as u64 * self.config.gas_access_list_storage_key;
+				if self.config.max_initcode_size.is_some() {
+					cost += initcode_cost;
+				}
+				cost
 			}
 		};
 
@@ -319,13 +324,22 @@ pub fn create_transaction_cost(data: &[u8], access_list: &[(H160, Vec<H256>)]) -
 	let zero_data_len = data.iter().filter(|v| **v == 0).count();
 	let non_zero_data_len = data.len() - zero_data_len;
 	let (access_list_address_len, access_list_storage_len) = count_access_list(access_list);
+	let initcode_cost = init_code_cost(data);
 
 	TransactionCost::Create {
 		zero_data_len,
 		non_zero_data_len,
 		access_list_address_len,
 		access_list_storage_len,
+		initcode_cost,
 	}
+}
+
+pub fn init_code_cost(data: &[u8]) -> u64 {
+	// As per EIP-3860:
+	// > We define initcode_cost(initcode) to equal INITCODE_WORD_COST * ceil(len(initcode) / 32).
+	// where INITCODE_WORD_COST is 2.
+	2 * ((data.len() as u64 + 31) / 32)
 }
 
 /// Counts the number of addresses and storage keys in the access list
@@ -467,7 +481,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 	stack: &Stack,
 	is_static: bool,
 	config: &Config,
-	handler: &H,
+	handler: &mut H,
 ) -> Result<(GasCost, StorageTarget, Option<MemoryCost>), ExitError> {
 	let mut storage_target = StorageTarget::None;
 	let gas_cost = match opcode {
@@ -494,14 +508,14 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			let target = stack.peek_h256(0)?.into();
 			storage_target = StorageTarget::Address(target);
 			GasCost::ExtCodeSize {
-				target_is_cold: handler.is_cold(target, None),
+				target_is_cold: handler.is_cold(target, None)?,
 			}
 		}
 		Opcode::BALANCE => {
 			let target = stack.peek_h256(0)?.into();
 			storage_target = StorageTarget::Address(target);
 			GasCost::Balance {
-				target_is_cold: handler.is_cold(target, None),
+				target_is_cold: handler.is_cold(target, None)?,
 			}
 		}
 		Opcode::BLOCKHASH => GasCost::BlockHash,
@@ -510,7 +524,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			let target = stack.peek_h256(0)?.into();
 			storage_target = StorageTarget::Address(target);
 			GasCost::ExtCodeHash {
-				target_is_cold: handler.is_cold(target, None),
+				target_is_cold: handler.is_cold(target, None)?,
 			}
 		}
 		Opcode::EXTCODEHASH => GasCost::Invalid(opcode),
@@ -521,7 +535,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			GasCost::CallCode {
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
-				target_is_cold: handler.is_cold(target, None),
+				target_is_cold: handler.is_cold(target, None)?,
 				target_exists: handler.exists(target),
 			}
 		}
@@ -530,7 +544,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			storage_target = StorageTarget::Address(target);
 			GasCost::StaticCall {
 				gas: stack.peek(0)?,
-				target_is_cold: handler.is_cold(target, None),
+				target_is_cold: handler.is_cold(target, None)?,
 				target_exists: handler.exists(target),
 			}
 		}
@@ -541,7 +555,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			let target = stack.peek_h256(0)?.into();
 			storage_target = StorageTarget::Address(target);
 			GasCost::ExtCodeCopy {
-				target_is_cold: handler.is_cold(target, None),
+				target_is_cold: handler.is_cold(target, None)?,
 				len: stack.peek(3)?,
 			}
 		}
@@ -555,7 +569,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			let index = stack.peek_h256(0)?;
 			storage_target = StorageTarget::Slot(address, index);
 			GasCost::SLoad {
-				target_is_cold: handler.is_cold(address, Some(index)),
+				target_is_cold: handler.is_cold(address, Some(index))?,
 			}
 		}
 
@@ -564,7 +578,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			storage_target = StorageTarget::Address(target);
 			GasCost::DelegateCall {
 				gas: stack.peek(0)?,
-				target_is_cold: handler.is_cold(target, None),
+				target_is_cold: handler.is_cold(target, None)?,
 				target_exists: handler.exists(target),
 			}
 		}
@@ -585,7 +599,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 				original: handler.original_storage(address, index),
 				current: handler.storage(address, index),
 				new: value,
-				target_is_cold: handler.is_cold(address, Some(index)),
+				target_is_cold: handler.is_cold(address, Some(index))?,
 			}
 		}
 		Opcode::LOG0 if !is_static => GasCost::Log {
@@ -617,7 +631,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			storage_target = StorageTarget::Address(target);
 			GasCost::Suicide {
 				value: handler.balance(address),
-				target_is_cold: handler.is_cold(target, None),
+				target_is_cold: handler.is_cold(target, None)?,
 				target_exists: handler.exists(target),
 				already_removed: handler.deleted(address),
 			}
@@ -628,10 +642,12 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			GasCost::Call {
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
-				target_is_cold: handler.is_cold(target, None),
+				target_is_cold: handler.is_cold(target, None)?,
 				target_exists: handler.exists(target),
 			}
 		}
+
+		Opcode::PUSH0 if config.has_push0 => GasCost::Base,
 
 		_ => GasCost::Invalid(opcode),
 	};
@@ -1033,6 +1049,8 @@ pub enum TransactionCost {
 		access_list_address_len: usize,
 		/// Total number of storage keys in transaction access list (see EIP-2930)
 		access_list_storage_len: usize,
+		/// Cost of initcode = 2 * ceil(len(initcode) / 32) (see EIP-3860)
+		initcode_cost: u64,
 	},
 }
 
