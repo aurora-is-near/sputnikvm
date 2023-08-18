@@ -7,14 +7,10 @@ use primitive_types::{H256, U256};
 use sha3::{Digest, Keccak256};
 
 pub fn sha3<H: Handler>(runtime: &mut Runtime) -> Control<H> {
-	pop_u256!(runtime, from);
+	pop_usize!(runtime, from);
 	pop_usize!(runtime, len);
 
-	let from = if len == 0 {
-		usize::MAX
-	} else {
-		from.as_usize()
-	};
+	let from = if len == 0 { usize::MAX } else { from };
 
 	try_or_fail!(runtime.machine.memory_mut().resize_offset(from, len));
 	let data = if len == 0 {
@@ -248,14 +244,10 @@ pub fn gas<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 }
 
 pub fn log<H: Handler>(runtime: &mut Runtime, n: u8, handler: &mut H) -> Control<H> {
-	pop_u256!(runtime, offset);
+	pop_usize!(runtime, offset);
 	pop_usize!(runtime, len);
 
-	let offset = if len == 0 {
-		usize::MAX
-	} else {
-		offset.as_usize()
-	};
+	let offset = if len == 0 { usize::MAX } else { offset };
 
 	try_or_fail!(runtime.machine.memory_mut().resize_offset(offset, len));
 	let data = if len == 0 {

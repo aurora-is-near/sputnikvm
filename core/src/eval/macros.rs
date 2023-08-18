@@ -63,7 +63,12 @@ macro_rules! pop_usize {
 	( $machine:expr, $( $x:ident ),* ) => (
 		$(
 			let $x = match $machine.stack.pop() {
-				Ok(value) => value.as_usize(),
+				Ok(value) if value <= usize::MAX.into() => value.as_usize(),
+				Ok(_) => return Control::Exit(crate::ExitReason::Fatal(
+					crate::ExitFatal::Other(
+						std::borrow::Cow::Borrowed("Number is bigger then usize::MAX"))
+					)
+				),
 				Err(e) => return Control::Exit(e.into()),
 			};
 		)*
