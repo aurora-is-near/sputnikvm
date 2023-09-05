@@ -190,7 +190,7 @@ impl<'config> Gasometer<'config> {
 		let gas = self.gas();
 		// Extract a mutable reference to `Inner` to avoid checking `Result`
 		// repeatedly. Tuning performance as this function is on the hot path.
-		let mut inner_mut = match &mut self.inner {
+		let inner_mut = match &mut self.inner {
 			Ok(inner) => inner,
 			Err(err) => return Err(err.clone()),
 		};
