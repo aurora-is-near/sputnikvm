@@ -75,7 +75,7 @@ impl<'vicinity> MemoryBackend<'vicinity> {
 	}
 
 	/// Get the underlying `BTreeMap` storing the state.
-	pub fn state(&self) -> &BTreeMap<H160, MemoryAccount> {
+	pub const fn state(&self) -> &BTreeMap<H160, MemoryAccount> {
 		&self.state
 	}
 

@@ -64,7 +64,7 @@ pub trait InterpreterHandler {
 
 impl Machine {
 	/// Reference of machine stack.
-	pub fn stack(&self) -> &Stack {
+	pub const fn stack(&self) -> &Stack {
 		&self.stack
 	}
 	/// Mutable reference of machine stack.
@@ -72,7 +72,7 @@ impl Machine {
 		&mut self.stack
 	}
 	/// Reference of machine memory.
-	pub fn memory(&self) -> &Memory {
+	pub const fn memory(&self) -> &Memory {
 		&self.memory
 	}
 	/// Mutable reference of machine memory.
@@ -80,7 +80,7 @@ impl Machine {
 		&mut self.memory
 	}
 	/// Return a reference of the program counter.
-	pub fn position(&self) -> &Result<usize, ExitReason> {
+	pub const fn position(&self) -> &Result<usize, ExitReason> {
 		&self.position
 	}
 
@@ -185,15 +185,17 @@ pub struct SimpleInterpreterHandler {
 }
 
 impl SimpleInterpreterHandler {
-	pub fn new(address: H160) -> Self {
+	pub const fn new(address: H160) -> Self {
 		Self {
 			executed: 0,
 			profile: [0; 256],
 			address,
 		}
 	}
+}
 
-	pub fn default() -> Self {
+impl Default for SimpleInterpreterHandler {
+	fn default() -> Self {
 		Self {
 			executed: 0,
 			profile: [0; 256],

@@ -11,7 +11,7 @@ pub struct Stack {
 
 impl Stack {
 	/// Create a new stack with given limit.
-	pub fn new(limit: usize) -> Self {
+	pub const fn new(limit: usize) -> Self {
 		Self {
 			data: Vec::new(),
 			limit,
@@ -20,7 +20,7 @@ impl Stack {
 
 	#[inline]
 	/// Stack limit.
-	pub fn limit(&self) -> usize {
+	pub const fn limit(&self) -> usize {
 		self.limit
 	}
 
@@ -38,7 +38,7 @@ impl Stack {
 
 	#[inline]
 	/// Stack data.
-	pub fn data(&self) -> &Vec<U256> {
+	pub const fn data(&self) -> &Vec<U256> {
 		&self.data
 	}
 

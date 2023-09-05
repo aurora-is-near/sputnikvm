@@ -15,7 +15,7 @@ pub struct Memory {
 
 impl Memory {
 	/// Create a new memory with the given limit.
-	pub fn new(limit: usize) -> Self {
+	pub const fn new(limit: usize) -> Self {
 		Self {
 			data: Vec::new(),
 			effective_len: 0,
@@ -24,7 +24,7 @@ impl Memory {
 	}
 
 	/// Memory limit.
-	pub fn limit(&self) -> usize {
+	pub const fn limit(&self) -> usize {
 		self.limit
 	}
 
@@ -34,7 +34,7 @@ impl Memory {
 	}
 
 	/// Get the effective length.
-	pub fn effective_len(&self) -> usize {
+	pub const fn effective_len(&self) -> usize {
 		self.effective_len
 	}
 
@@ -44,7 +44,7 @@ impl Memory {
 	}
 
 	/// Return the full memory.
-	pub fn data(&self) -> &Vec<u8> {
+	pub const fn data(&self) -> &Vec<u8> {
 		&self.data
 	}
 
@@ -56,11 +56,9 @@ impl Memory {
 			return Ok(());
 		}
 
-		if let Some(end) = offset.checked_add(len) {
-			self.resize_end(end)
-		} else {
-			Err(ExitError::InvalidRange)
-		}
+		offset
+			.checked_add(len)
+			.map_or(Err(ExitError::InvalidRange), |end| self.resize_end(end))
 	}
 
 	/// Resize the memory, making it cover to `end`, with 32 bytes as the step.
@@ -165,22 +163,22 @@ impl Memory {
 			return Ok(());
 		}
 
-		let data = if let Some(end) = data_offset.checked_add(len.into()) {
-			if end > U256::from(usize::MAX) {
-				&[]
-			} else {
-				let data_offset = data_offset.as_usize();
-				let end = end.as_usize();
-
-				if data_offset > data.len() {
+		let data = data_offset
+			.checked_add(len.into())
+			.map_or(&[] as &[u8], |end| {
+				if end > U256::from(usize::MAX) {
 					&[]
 				} else {
-					&data[data_offset..min(end, data.len())]
+					let data_offset = data_offset.as_usize();
+					let end = end.as_usize();
+
+					if data_offset > data.len() {
+						&[]
+					} else {
+						&data[data_offset..min(end, data.len())]
+					}
 				}
-			}
-		} else {
-			&[]
-		};
+			});
 
 		self.set(memory_offset, data, Some(len))
 	}

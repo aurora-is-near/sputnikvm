@@ -8,6 +8,7 @@
 pub struct Opcode(pub u8);
 
 // Core opcodes.
+#[allow(clippy::use_self)]
 impl Opcode {
 	/// `STOP`
 	pub const STOP: Opcode = Opcode(0x00);
@@ -178,6 +179,7 @@ impl Opcode {
 }
 
 // External opcodes
+#[allow(clippy::use_self)]
 impl Opcode {
 	/// `SHA3`
 	pub const SHA3: Opcode = Opcode(0x20);
