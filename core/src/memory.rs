@@ -15,6 +15,7 @@ pub struct Memory {
 
 impl Memory {
 	/// Create a new memory with the given limit.
+	#[must_use]
 	pub const fn new(limit: usize) -> Self {
 		Self {
 			data: Vec::new(),
@@ -24,33 +25,37 @@ impl Memory {
 	}
 
 	/// Memory limit.
+	#[must_use]
 	pub const fn limit(&self) -> usize {
 		self.limit
 	}
 
 	/// Get the length of the current memory range.
+	#[must_use]
 	pub fn len(&self) -> usize {
 		self.data.len()
 	}
 
 	/// Get the effective length.
+	#[must_use]
 	pub const fn effective_len(&self) -> usize {
 		self.effective_len
 	}
 
 	/// Return true if current effective memory range is zero.
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.len() == 0
 	}
 
 	/// Return the full memory.
+	#[must_use]
 	pub const fn data(&self) -> &Vec<u8> {
 		&self.data
 	}
 
-	/// Resize the memory, making it cover the memory region of `offset..(offset
-	/// + len)`, with 32 bytes as the step. If the length is zero, this function
-	/// does nothing.
+	/// Resize the memory, making it cover the memory region of `offset..offset + len`,
+	/// with 32 bytes as the step. If the length is zero, this function does nothing.
 	pub fn resize_offset(&mut self, offset: usize, len: usize) -> Result<(), ExitError> {
 		if len == 0 {
 			return Ok(());
@@ -77,6 +82,7 @@ impl Memory {
 	///
 	/// Value of `size` is considered trusted. If they're too large,
 	/// the program can run out of memory, or it can overflow.
+	#[must_use]
 	pub fn get(&self, mut offset: usize, size: usize) -> Vec<u8> {
 		if offset > self.data.len() {
 			offset = self.data.len();
@@ -93,6 +99,7 @@ impl Memory {
 	}
 
 	/// Get `H256` from a specific offset in memory.
+	#[must_use]
 	pub fn get_h256(&self, offset: usize) -> H256 {
 		let mut ret = [0; 32];
 
@@ -124,8 +131,7 @@ impl Memory {
 
 		if offset
 			.checked_add(target_size)
-			.map(|pos| pos > self.limit)
-			.unwrap_or(true)
+			.map_or(true, |pos| pos > self.limit)
 		{
 			return Err(ExitFatal::NotSupported);
 		}
