@@ -13,6 +13,40 @@ use serde::Deserialize;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
+use std::str::FromStr;
+
+#[derive(Clone, Debug)]
+pub struct FailedTestDetails {
+	pub name: String,
+	pub spec: ForkSpec,
+	pub index: usize,
+	pub expected_hash: H256,
+	pub actual_hash: H256,
+}
+
+#[derive(Clone, Debug)]
+pub struct TestExecutionResult {
+	pub total: u64,
+	pub failed: u64,
+	pub failed_tests: Vec<FailedTestDetails>,
+}
+
+impl TestExecutionResult {
+	#[allow(clippy::new_without_default)]
+	pub const fn new() -> Self {
+		Self {
+			total: 0,
+			failed: 0,
+			failed_tests: Vec::new(),
+		}
+	}
+
+	pub fn merge(&mut self, src: Self) {
+		self.failed_tests.extend(src.failed_tests);
+		self.total += src.total;
+		self.failed += src.failed;
+	}
+}
 
 #[derive(Deserialize, Debug)]
 pub struct Test(ethjson::test_helpers::state::State);
@@ -158,6 +192,8 @@ impl JsonPrecompile {
 			ForkSpec::London => Self::precompile(&ForkSpec::Berlin),
 			// precompiles for Merge and Berlin are the same
 			ForkSpec::Merge => Self::precompile(&ForkSpec::Berlin),
+			// precompiles for Paris and Berlin are the same
+			ForkSpec::Paris => Self::precompile(&ForkSpec::Berlin),
 			// precompiles for Shanghai and Berlin are the same
 			ForkSpec::Shanghai => Self::precompile(&ForkSpec::Berlin),
 			ForkSpec::Cancun => Self::precompile(&ForkSpec::Berlin),
@@ -211,7 +247,12 @@ impl JsonPrecompile {
 	}
 }
 
-pub fn test(name: &str, test: Test) {
+pub fn test(
+	name: &str,
+	test: Test,
+	print_output: bool,
+	specific_spec: Option<ForkSpec>,
+) -> TestExecutionResult {
 	use std::thread;
 
 	const STACK_SIZE: usize = 16 * 1024 * 1024;
@@ -220,22 +261,35 @@ pub fn test(name: &str, test: Test) {
 	// Spawn thread with explicit stack size
 	let child = thread::Builder::new()
 		.stack_size(STACK_SIZE)
-		.spawn(move || test_run(&name, test))
+		.spawn(move || test_run(&name, test, print_output, specific_spec))
 		.unwrap();
 
 	// Wait for thread to join
-	child.join().unwrap();
+	child.join().unwrap()
 }
 
-fn test_run(name: &str, test: Test) {
+fn test_run(
+	name: &str,
+	test: Test,
+	print_output: bool,
+	specific_spec: Option<ForkSpec>,
+) -> TestExecutionResult {
+	let mut tests_result = TestExecutionResult::new();
 	for (spec, states) in &test.0.post_states {
+		// Run tests for specific SPEC (Hard fork)
+		if let Some(s) = specific_spec.as_ref() {
+			if s != spec {
+				continue;
+			}
+		}
 		let (gasometer_config, delete_empty) = match spec {
-			ethjson::spec::ForkSpec::Istanbul => (Config::istanbul(), true),
-			ethjson::spec::ForkSpec::Berlin => (Config::berlin(), true),
-			ethjson::spec::ForkSpec::London => (Config::london(), true),
-			ethjson::spec::ForkSpec::Merge => (Config::merge(), true),
-			ethjson::spec::ForkSpec::Shanghai => (Config::shanghai(), true),
-			// ethjson::spec::ForkSpec::Cancun => (Config::cancun(), true),
+			ForkSpec::Istanbul => (Config::istanbul(), true),
+			ForkSpec::Berlin => (Config::berlin(), true),
+			ForkSpec::London => (Config::london(), true),
+			ForkSpec::Merge => (Config::merge(), true),
+			ForkSpec::Paris => (Config::merge(), true),
+			ForkSpec::Shanghai => (Config::shanghai(), true),
+			// ForkSpec::Cancun => (Config::cancun(), false),
 			spec => {
 				println!("Skip spec {spec:?}");
 				continue;
@@ -245,9 +299,20 @@ fn test_run(name: &str, test: Test) {
 		let original_state = test.unwrap_to_pre_state();
 		let vicinity = test.unwrap_to_vicinity(spec);
 		if vicinity.is_none() {
+			let h = states.first().unwrap().hash.0;
 			// if vicinity could not be computed then the transaction was invalid so we simply
 			// check the original state and move on
-			assert_valid_hash(&states.first().unwrap().hash.0, &original_state);
+			let (is_valid_hash, actual_hash) = assert_valid_hash(&h, &original_state);
+			if !is_valid_hash {
+				tests_result.failed_tests.push(FailedTestDetails {
+					expected_hash: h,
+					actual_hash,
+					index: 0,
+					name: String::from_str(name).unwrap(),
+					spec: spec.clone(),
+				});
+				tests_result.failed += 1;
+			}
 			continue;
 		}
 		let vicinity = vicinity.unwrap();
@@ -257,8 +322,10 @@ fn test_run(name: &str, test: Test) {
 			.map_or_else(U256::zero, |acc| acc.balance);
 
 		for (i, state) in states.iter().enumerate() {
-			print!("Running {}:{:?}:{} ... ", name, spec, i);
-			flush();
+			if print_output {
+				print!("Running {}:{:?}:{} ... ", name, spec, i);
+				flush();
+			}
 
 			let transaction = test.0.transaction.select(&state.indexes);
 			let mut backend = MemoryBackend::new(&vicinity, original_state.clone());
@@ -280,6 +347,8 @@ fn test_run(name: &str, test: Test) {
 			if expect_tx_type_not_supported {
 				continue;
 			}
+
+			tests_result.total += 1;
 
 			// Only execute valid transactions
 			if let Ok(transaction) = crate::utils::transaction::validate(
@@ -354,12 +423,22 @@ fn test_run(name: &str, test: Test) {
 
 				backend.apply(values, logs, delete_empty);
 			}
-
-			assert_valid_hash(&state.hash.0, backend.state());
-
-			println!("passed");
+			let (is_valid_hash, actual_hash) = assert_valid_hash(&state.hash.0, backend.state());
+			if !is_valid_hash {
+				tests_result.failed_tests.push(FailedTestDetails {
+					expected_hash: state.hash.0,
+					actual_hash,
+					index: i,
+					name: String::from_str(name).unwrap(),
+					spec: spec.clone(),
+				});
+				tests_result.failed += 1;
+			} else if print_output {
+				println!("passed");
+			}
 		}
 	}
+	tests_result
 }
 
 /// Denotes the type of transaction.
@@ -371,6 +450,8 @@ enum TxType {
 	AccessList,
 	/// https://eips.ethereum.org/EIPS/eip-1559
 	DynamicFee,
+	/// https://eips.ethereum.org/EIPS/eip-4844
+	ShardBlob,
 }
 
 impl TxType {
@@ -382,6 +463,7 @@ impl TxType {
 			b if b > 0x7f => Self::Legacy,
 			1 => Self::AccessList,
 			2 => Self::DynamicFee,
+			3 => Self::ShardBlob,
 			_ => panic!(
 				"Unknown tx type. \
 You may need to update the TxType enum if Ethereum introduced new enveloped transaction types."

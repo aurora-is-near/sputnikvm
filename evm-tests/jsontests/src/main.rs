@@ -51,7 +51,7 @@ fn main() {
 				.expect("Parse test cases failed");
 
 			for (name, test) in coll {
-				statetests::test(&name, test);
+				let _tests_result = statetests::test(&name, test, false, None);
 			}
 		}
 	}

@@ -22,7 +22,7 @@ use serde_json::Error;
 use std::io::Read;
 
 /// Fork spec definition
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 pub enum ForkSpec {
 	/// EIP 150 Tangerine Whistle: Gas cost changes for IO-heavy operations (#2,463,000, 2016-10-18)
 	EIP150,
@@ -71,7 +71,10 @@ impl ForkSpec {
 	/// Returns true if the fork is at or after the merge.
 	pub const fn is_eth2(&self) -> bool {
 		// NOTE: Include new forks in this match arm.
-		matches!(*self, Self::London | Self::Merge | Self::Shanghai)
+		matches!(
+			*self,
+			Self::Cancun | Self::London | Self::Merge | Self::Paris | Self::Shanghai
+		)
 	}
 }
 

@@ -75,8 +75,8 @@ impl Test {
 }
 
 pub fn test(name: &str, test: Test) {
-	print!("Running test {} ... ", name);
-	flush();
+	// print!("Running test {} ... ", name);
+	// flush();
 
 	let original_state = test.unwrap_to_pre_state();
 	let vicinity = test.unwrap_to_vicinity();
@@ -99,13 +99,13 @@ pub fn test(name: &str, test: Test) {
 	backend.apply(values, logs, false);
 
 	if test.0.output.is_none() {
-		print!("{:?} ", reason);
+		// print!("{:?} ", reason);
 
 		assert!(!reason.is_succeed());
 		assert!(test.0.post_state.is_none() && test.0.gas_left.is_none());
 	} else {
 		let expected_post_gas = test.unwrap_to_post_gas();
-		print!("{:?} ", reason);
+		// print!("{:?} ", reason);
 
 		assert_eq!(
 			runtime.machine().return_value(),
@@ -115,5 +115,5 @@ pub fn test(name: &str, test: Test) {
 		assert_eq!(gas, expected_post_gas);
 	}
 
-	println!("succeed");
+	// println!("succeed");
 }

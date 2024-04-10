@@ -112,11 +112,16 @@ pub fn assert_valid_state(a: &ethjson::spec::State, b: &BTreeMap<H160, MemoryAcc
 				b
 			);
 		}
-		ethjson::spec::HashOrMap::Hash(h) => assert_valid_hash(&(*h).into(), b),
+		ethjson::spec::HashOrMap::Hash(h) => {
+			let x = assert_valid_hash(&(*h).into(), b);
+			if !x.0 {
+				panic!("Wrong hash: {:#x?}", x.1);
+			}
+		}
 	}
 }
 
-pub fn assert_valid_hash(h: &H256, b: &BTreeMap<H160, MemoryAccount>) {
+pub fn assert_valid_hash(h: &H256, b: &BTreeMap<H160, MemoryAccount>) -> (bool, H256) {
 	let tree = b
 		.iter()
 		.map(|(address, account)| {
@@ -142,13 +147,7 @@ pub fn assert_valid_hash(h: &H256, b: &BTreeMap<H160, MemoryAccount>) {
 
 	let root = ethereum::util::sec_trie_root(tree);
 	let expect = h;
-
-	if root != *expect {
-		panic!(
-			"Hash not equal; calculated: {:?}, expect: {:?}\nState: {:#x?}",
-			root, expect, b
-		);
-	}
+	(root == *expect, root)
 }
 
 pub fn flush() {
