@@ -18,7 +18,7 @@ fn short_test_file_name(name: &str) -> String {
 pub fn run(dir: &str) {
 	const PRINT_OUTPUT: bool = false;
 	// const SPEC: Option<ForkSpec> = Some(ForkSpec::Cancun);
-	const SPEC: Option<ForkSpec> = Some(ForkSpec::Paris);
+	const SPEC: Option<ForkSpec> = None;
 
 	let _ = env_logger::try_init();
 

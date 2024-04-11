@@ -19,6 +19,7 @@
 use crate::spec::{Engine, Genesis, HardcodedSync, Params, State};
 use serde::Deserialize;
 use serde_json::Error;
+use std::convert::TryFrom;
 use std::io::Read;
 
 /// Fork spec definition
@@ -75,6 +76,36 @@ impl ForkSpec {
 			*self,
 			Self::Cancun | Self::London | Self::Merge | Self::Paris | Self::Shanghai
 		)
+	}
+}
+
+impl TryFrom<String> for ForkSpec {
+	type Error = ();
+	fn try_from(value: String) -> Result<Self, Self::Error> {
+		let res = match value.to_lowercase().as_str() {
+			"eip158tobyzantiumat5" => Self::EIP158ToByzantiumAt5,
+			"frontiertohomesteadat5" => Self::FrontierToHomesteadAt5,
+			"homesteadtodaoat5" => Self::HomesteadToDaoAt5,
+			"homesteadtoeip150at5" => Self::HomesteadToEIP150At5,
+			"byzantiumtoconstantinoplefixat5" => Self::ByzantiumToConstantinopleFixAt5,
+			"constantinoplefixtoistanbulat5" => Self::ConstantinopleFixToIstanbulAt5,
+			"eip150" => Self::EIP150,
+			"eip158" => Self::EIP158,
+			"frontier" => Self::Frontier,
+			"homestead" => Self::Homestead,
+			"byzantium" => Self::Byzantium,
+			"constantinople" => Self::Constantinople,
+			"constantinoplefix" => Self::ConstantinopleFix,
+			"istanbul" => Self::Istanbul,
+			"berlin" => Self::Berlin,
+			"london" => Self::London,
+			"merge" => Self::Merge,
+			"paris" => Self::Paris,
+			"shanghai" => Self::Shanghai,
+			"cancun" => Self::Cancun,
+			_ => return Err(()),
+		};
+		Ok(res)
 	}
 }
 

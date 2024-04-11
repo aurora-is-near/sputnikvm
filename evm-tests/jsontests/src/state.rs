@@ -202,7 +202,7 @@ impl JsonPrecompile {
 	}
 
 	fn builtins(spec_path: &str) -> BTreeMap<H160, ethcore_builtin::Builtin> {
-		let reader = std::fs::File::open(spec_path).unwrap();
+		let reader = std::fs::File::open(spec_path).expect(spec_path);
 		let builtins: BTreeMap<ethjson::hash::Address, ethjson::spec::builtin::BuiltinCompat> =
 			serde_json::from_reader(reader).unwrap();
 		builtins
@@ -289,7 +289,7 @@ fn test_run(
 			ForkSpec::Merge => (Config::merge(), true),
 			ForkSpec::Paris => (Config::merge(), true),
 			ForkSpec::Shanghai => (Config::shanghai(), true),
-			// ForkSpec::Cancun => (Config::cancun(), false),
+			ForkSpec::Cancun => (Config::cancun(), false),
 			spec => {
 				println!("Skip spec {spec:?}");
 				continue;
