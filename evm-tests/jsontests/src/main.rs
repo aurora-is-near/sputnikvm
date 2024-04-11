@@ -1,7 +1,7 @@
 use clap::{arg, command, value_parser, Arg, ArgAction, Command};
 use ethjson::spec::ForkSpec;
 use evm_jsontests::state as statetests;
-use evm_jsontests::state::TestExecutionResult;
+use evm_jsontests::state::{TestExecutionResult, VerboseOutput};
 use evm_jsontests::vm as vmtests;
 use std::collections::HashMap;
 use std::fs;
@@ -68,17 +68,19 @@ fn main() {
 			None
 		};
 
-		let verbose = matches.get_flag("verbose");
-		let _very_verbose = matches.get_flag("very_verbose");
-		let verbose_failed = matches.get_flag("verbose_failed");
+		let verbose_output = VerboseOutput {
+			verbose: matches.get_flag("verbose"),
+			verbose_failed: matches.get_flag("verbose_failed"),
+			very_verbose: matches.get_flag("very_verbose"),
+		};
 		let mut tests_result = TestExecutionResult::new();
 		for src_name in matches.get_many::<PathBuf>("PATH").unwrap() {
 			let path = Path::new(src_name);
 			assert!(path.exists(), "data source is not exist");
 			if path.is_file() {
-				run_test_for_file(&spec, verbose, verbose_failed, path, &mut tests_result);
+				run_test_for_file(&spec, &verbose_output, path, &mut tests_result);
 			} else if path.is_dir() {
-				run_test_for_dir(&spec, verbose, verbose_failed, path, &mut tests_result);
+				run_test_for_dir(&spec, &verbose_output, path, &mut tests_result);
 			}
 		}
 		println!("\nTOTAL: {}", tests_result.total);
@@ -88,8 +90,7 @@ fn main() {
 
 fn run_test_for_dir(
 	spec: &Option<ForkSpec>,
-	verbose: bool,
-	verbose_failed: bool,
+	verbose_output: &VerboseOutput,
 	dir_name: &Path,
 	tests_result: &mut TestExecutionResult,
 ) {
@@ -106,29 +107,28 @@ fn run_test_for_dir(
 		}
 		let path = entry.path();
 		if path.is_dir() {
-			run_test_for_dir(spec, verbose, verbose_failed, path.as_path(), tests_result);
+			run_test_for_dir(spec, verbose_output, path.as_path(), tests_result);
 		} else {
-			run_test_for_file(spec, verbose, verbose_failed, path.as_path(), tests_result);
+			run_test_for_file(spec, verbose_output, path.as_path(), tests_result);
 		}
 	}
 }
 
 fn run_test_for_file(
 	spec: &Option<ForkSpec>,
-	verbose: bool,
-	verbose_failed: bool,
+	verbose_output: &VerboseOutput,
 	file_name: &Path,
 	tests_result: &mut TestExecutionResult,
 ) {
 	if should_skip(file_name) {
-		if verbose {
+		if verbose_output.verbose {
 			println!("Skipping test case {:?}", file_name);
 		}
 		return;
 	}
-	if verbose {
+	if verbose_output.verbose {
 		println!(
-			"RUM for: {}",
+			"RUN for: {}",
 			short_test_file_name(file_name.to_str().unwrap())
 		);
 	}
@@ -139,29 +139,29 @@ fn run_test_for_file(
 		.expect("Parse test cases failed");
 
 	for (name, test) in test_suite {
-		let test_res = statetests::test(&name, test, false, spec.clone());
+		let test_res = statetests::test(verbose_output.clone(), &name, test, spec.clone());
 
 		if test_res.failed > 0 {
-			if verbose {
-				println!("Tests count: {}", test_res.total);
+			if verbose_output.verbose {
+				println!("Tests count:\t{}", test_res.total);
 				println!(
-					"Failed: {} {}\n",
+					"Failed:\t\t{} - {}\n",
 					test_res.failed,
 					short_test_file_name(file_name.to_str().unwrap())
 				);
-			} else if verbose_failed {
+			} else if verbose_output.verbose_failed {
 				println!(
-					"RUM for: {}",
+					"RUN for: {}",
 					short_test_file_name(file_name.to_str().unwrap())
 				);
-				println!("Tests count: {}", test_res.total);
+				println!("Tests count:\t{}", test_res.total);
 				println!(
-					"Failed: {} {}\n",
+					"Failed:\t\t{} - {}\n",
 					test_res.failed,
 					short_test_file_name(file_name.to_str().unwrap())
 				);
 			}
-		} else if verbose {
+		} else if verbose_output.verbose {
 			println!("Tests count: {}\n", test_res.total);
 		}
 

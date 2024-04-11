@@ -15,6 +15,13 @@ use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::str::FromStr;
 
+#[derive(Default, Debug, Clone)]
+pub struct VerboseOutput {
+	pub verbose: bool,
+	pub verbose_failed: bool,
+	pub very_verbose: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct FailedTestDetails {
 	pub name: String,
@@ -248,9 +255,9 @@ impl JsonPrecompile {
 }
 
 pub fn test(
+	verbose_output: VerboseOutput,
 	name: &str,
 	test: Test,
-	print_output: bool,
 	specific_spec: Option<ForkSpec>,
 ) -> TestExecutionResult {
 	use std::thread;
@@ -261,7 +268,7 @@ pub fn test(
 	// Spawn thread with explicit stack size
 	let child = thread::Builder::new()
 		.stack_size(STACK_SIZE)
-		.spawn(move || test_run(&name, test, print_output, specific_spec))
+		.spawn(move || test_run(&verbose_output, &name, test, specific_spec))
 		.unwrap();
 
 	// Wait for thread to join
@@ -269,9 +276,9 @@ pub fn test(
 }
 
 fn test_run(
+	verbose_output: &VerboseOutput,
 	name: &str,
 	test: Test,
-	print_output: bool,
 	specific_spec: Option<ForkSpec>,
 ) -> TestExecutionResult {
 	let mut tests_result = TestExecutionResult::new();
@@ -289,7 +296,7 @@ fn test_run(
 			ForkSpec::Merge => (Config::merge(), true),
 			ForkSpec::Paris => (Config::merge(), true),
 			ForkSpec::Shanghai => (Config::shanghai(), true),
-			ForkSpec::Cancun => (Config::cancun(), false),
+			ForkSpec::Cancun => (Config::cancun(), true),
 			spec => {
 				println!("Skip spec {spec:?}");
 				continue;
@@ -322,8 +329,8 @@ fn test_run(
 			.map_or_else(U256::zero, |acc| acc.balance);
 
 		for (i, state) in states.iter().enumerate() {
-			if print_output {
-				print!("Running {}:{:?}:{} ... ", name, spec, i);
+			if verbose_output.very_verbose {
+				print!(" [{:?}]  {}:{} ... ", spec, name, i);
 				flush();
 			}
 
@@ -433,7 +440,8 @@ fn test_run(
 					spec: spec.clone(),
 				});
 				tests_result.failed += 1;
-			} else if print_output {
+				println!("failed\t<----");
+			} else if verbose_output.very_verbose {
 				println!("passed");
 			}
 		}
