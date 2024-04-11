@@ -9,6 +9,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
+#[allow(clippy::cognitive_complexity)]
 fn main() {
 	let matches = command!()
 		.version(env!("CARGO_PKG_VERSION"))
@@ -62,11 +63,9 @@ fn main() {
 	}
 
 	if let Some(matches) = matches.subcommand_matches("state") {
-		let spec: Option<ForkSpec> = if let Some(spec) = matches.get_one::<String>("spec") {
-			spec.clone().try_into().ok()
-		} else {
-			None
-		};
+		let spec: Option<ForkSpec> = matches
+			.get_one::<String>("spec")
+			.and_then(|spec| spec.clone().try_into().ok());
 
 		let verbose_output = VerboseOutput {
 			verbose: matches.get_flag("verbose"),

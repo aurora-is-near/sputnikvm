@@ -12,8 +12,8 @@ use primitive_types::{H160, H256, U256};
 use serde::Deserialize;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
-use std::convert::TryInto;
 use std::str::FromStr;
+use std::u128;
 
 #[derive(Default, Debug, Clone)]
 pub struct VerboseOutput {
@@ -29,6 +29,7 @@ pub struct FailedTestDetails {
 	pub index: usize,
 	pub expected_hash: H256,
 	pub actual_hash: H256,
+	pub state: BTreeMap<H160, MemoryAccount>,
 }
 
 #[derive(Clone, Debug)]
@@ -317,6 +318,7 @@ fn test_run(
 					index: 0,
 					name: String::from_str(name).unwrap(),
 					spec: spec.clone(),
+					state: original_state,
 				});
 				tests_result.failed += 1;
 			}
@@ -432,15 +434,37 @@ fn test_run(
 			}
 			let (is_valid_hash, actual_hash) = assert_valid_hash(&state.hash.0, backend.state());
 			if !is_valid_hash {
-				tests_result.failed_tests.push(FailedTestDetails {
+				let failed_res = FailedTestDetails {
 					expected_hash: state.hash.0,
 					actual_hash,
 					index: i,
 					name: String::from_str(name).unwrap(),
 					spec: spec.clone(),
-				});
+					state: backend.state().clone(),
+				};
+				tests_result.failed_tests.push(failed_res);
 				tests_result.failed += 1;
 				println!("failed\t<----");
+				// Print detailed state data
+				for (addr, acc) in backend.state().clone() {
+					// Decode balance
+					let mut write_buf = [0u8; 32];
+					acc.balance.to_big_endian(&mut write_buf[..]);
+					let balance = if acc.balance > U256::from(u128::MAX) {
+						hex::encode(write_buf)
+					} else {
+						format!("{:x?}", acc.balance.as_u128())
+					};
+
+					println!(
+                        "{:?}: {{\n    balance: {}\n    code: {:?}\n    nonce: {}\n    storage: {:#?}\n}}",
+                        addr,
+                        balance,
+                        acc.code,
+                        acc.nonce,
+                        acc.storage
+                    );
+				}
 			} else if verbose_output.very_verbose {
 				println!("passed");
 			}

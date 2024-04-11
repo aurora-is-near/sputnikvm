@@ -1,6 +1,6 @@
 use ethjson::spec::ForkSpec;
 use evm_jsontests::state as statetests;
-use evm_jsontests::state::TestExecutionResult;
+use evm_jsontests::state::{TestExecutionResult, VerboseOutput};
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -16,7 +16,6 @@ fn short_test_file_name(name: &str) -> String {
 }
 
 pub fn run(dir: &str) {
-	const PRINT_OUTPUT: bool = false;
 	// const SPEC: Option<ForkSpec> = Some(ForkSpec::Cancun);
 	const SPEC: Option<ForkSpec> = Some(ForkSpec::Shanghai);
 
@@ -26,6 +25,11 @@ pub fn run(dir: &str) {
 	dest.push(dir);
 
 	let mut tests_result = TestExecutionResult::new();
+	let verbose_output = VerboseOutput {
+		verbose: true,
+		very_verbose: true,
+		verbose_failed: true,
+	};
 	for entry in fs::read_dir(dest).unwrap() {
 		let entry = entry.unwrap();
 		if let Some(s) = entry.file_name().to_str() {
@@ -52,7 +56,7 @@ pub fn run(dir: &str) {
 			});
 
 		for (name, test) in test_suite {
-			let test_res = statetests::test(&name, test, PRINT_OUTPUT, SPEC);
+			let test_res = statetests::test(verbose_output.clone(), &name, test, SPEC);
 			// println!("Tests count: {}", test_res.total);
 			// println!("Failed: {}\n", test_res.failed);
 
