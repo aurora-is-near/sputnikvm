@@ -13,13 +13,13 @@ use serde::Deserialize;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use std::u128;
 
 #[derive(Default, Debug, Clone)]
 pub struct VerboseOutput {
 	pub verbose: bool,
 	pub verbose_failed: bool,
 	pub very_verbose: bool,
+	pub print_state: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -331,11 +331,6 @@ fn test_run(
 			.map_or_else(U256::zero, |acc| acc.balance);
 
 		for (i, state) in states.iter().enumerate() {
-			if verbose_output.very_verbose {
-				print!(" [{:?}]  {}:{} ... ", spec, name, i);
-				flush();
-			}
-
 			let transaction = test.0.transaction.select(&state.indexes);
 			let mut backend = MemoryBackend::new(&vicinity, original_state.clone());
 
@@ -409,6 +404,13 @@ fn test_run(
 					}
 				}
 
+				if verbose_output.print_state {
+					println!(
+						"gas_limit: {gas_limit}\nused_gas: {:?}",
+						executor.used_gas()
+					);
+				}
+
 				let actual_fee = executor.fee(vicinity.gas_price);
 				// Forks after London burn miner rewards and thus have different gas fee
 				// calculation (see EIP-1559)
@@ -444,29 +446,41 @@ fn test_run(
 				};
 				tests_result.failed_tests.push(failed_res);
 				tests_result.failed += 1;
-				println!("failed\t<----");
-				// Print detailed state data
-				for (addr, acc) in backend.state().clone() {
-					// Decode balance
-					let mut write_buf = [0u8; 32];
-					acc.balance.to_big_endian(&mut write_buf[..]);
-					let balance = if acc.balance > U256::from(u128::MAX) {
-						hex::encode(write_buf)
-					} else {
-						format!("{:x?}", acc.balance.as_u128())
-					};
 
+				println!(" [{:?}]  {}:{} ... failed\t<----", spec, name, i);
+				if verbose_output.print_state {
+					// Print detailed state data
 					println!(
-                        "{:?}: {{\n    balance: {}\n    code: {:?}\n    nonce: {}\n    storage: {:#?}\n}}",
-                        addr,
-                        balance,
-                        acc.code,
-                        acc.nonce,
-                        acc.storage
-                    );
+						"expected_hash:\t{:?}\nactual_hash:\t{actual_hash:?}",
+						state.hash.0,
+					);
+					for (addr, acc) in backend.state().clone() {
+						// Decode balance
+						let mut write_buf = [0u8; 32];
+						acc.balance.to_big_endian(&mut write_buf[..]);
+						// Convert to balance to Hex format
+						// let balance = if acc.balance > U256::from(u128::MAX) {
+						// 	hex::encode(write_buf)
+						// } else {
+						// 	format!("{:x?}", acc.balance.as_u128())
+						// };
+						let balance = acc.balance.to_string();
+
+						println!(
+                            "{:?}: {{\n    balance: {}\n    code: {:?}\n    nonce: {}\n    storage: {:#?}\n}}",
+                            addr,
+                            balance,
+                            hex::encode(acc.code),
+                            acc.nonce,
+                            acc.storage
+                        );
+					}
+					if let Some(e) = state.expect_exception.as_ref() {
+						println!("-> expect_exception: {e}");
+					}
 				}
-			} else if verbose_output.very_verbose {
-				println!("passed");
+			} else if verbose_output.very_verbose && !verbose_output.verbose_failed {
+				println!(" [{:?}]  {}:{} ... passed", spec, name, i);
 			}
 		}
 	}

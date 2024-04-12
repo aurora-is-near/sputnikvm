@@ -427,6 +427,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		access_list: &[(H160, Vec<H256>)],
 	) -> Result<(), ExitError> {
 		let transaction_cost = gasometer::create_transaction_cost(init_code, access_list);
+		// TODOFEE
+		println!("record_create_transaction_cost: {record_create_transaction_cost:?}");
 		let gasometer = &mut self.state.metadata_mut().gasometer;
 		gasometer.record_transaction(transaction_cost)
 	}
@@ -637,6 +639,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 
 		let transaction_cost = gasometer::call_transaction_cost(&data, &access_list);
+		// TODOFEE
+		println!("transaction_cost: {transaction_cost:?}");
 		let gasometer = &mut self.state.metadata_mut().gasometer;
 		match gasometer.record_transaction(transaction_cost) {
 			Ok(()) => (),

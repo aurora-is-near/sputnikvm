@@ -44,6 +44,11 @@ fn main() {
 					arg!(-w --very_verbose "Very verbose output")
 						.default_value("false")
 						.action(ArgAction::SetTrue),
+				)
+				.arg(
+					arg!(-p --print_state "When test failed print state")
+						.default_value("false")
+						.action(ArgAction::SetTrue),
 				),
 		)
 		.get_matches();
@@ -71,6 +76,7 @@ fn main() {
 			verbose: matches.get_flag("verbose"),
 			verbose_failed: matches.get_flag("verbose_failed"),
 			very_verbose: matches.get_flag("very_verbose"),
+			print_state: matches.get_flag("print_state"),
 		};
 		let mut tests_result = TestExecutionResult::new();
 		for src_name in matches.get_many::<PathBuf>("PATH").unwrap() {
@@ -183,9 +189,11 @@ const SKIPPED_CASES: &[&str] = &[
 	"stTransactionTest/HighGasPrice",
 	"stTransactionTest/HighGasPriceParis",
 	"stCreateTest/CreateTransactionHighNonce",
+	// Long execution
 	"stTimeConsuming/static_Call50000_sha256",
 	"stTimeConsuming/CALLBlake2f_MaxRounds",
 	"vmPerformance/loopMul",
+	"Pyspecs",
 ];
 
 fn should_skip(path: &Path) -> bool {
@@ -194,6 +202,7 @@ fn should_skip(path: &Path) -> bool {
 		let dir_path = path.parent().unwrap();
 		let dir_name = dir_path.file_name().unwrap();
 		Path::new(dir_name).join(file_stem) == Path::new(case)
+			|| Path::new(dir_name) == Path::new(case)
 	};
 
 	for case in SKIPPED_CASES {
