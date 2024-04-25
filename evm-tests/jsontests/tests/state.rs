@@ -29,6 +29,7 @@ pub fn run(dir: &str) {
 		verbose: true,
 		very_verbose: true,
 		verbose_failed: true,
+		print_state: true,
 	};
 	for entry in fs::read_dir(dest).unwrap() {
 		let entry = entry.unwrap();
