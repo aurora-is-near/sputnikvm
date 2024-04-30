@@ -155,6 +155,7 @@ impl<'config> MemoryStackSubstate<'config> {
 		self.storages.append(&mut exited.storages);
 		self.tstorages.append(&mut exited.tstorages);
 		self.deletes.append(&mut exited.deletes);
+		self.creates.append(&mut exited.creates);
 
 		Ok(())
 	}
@@ -282,18 +283,6 @@ impl<'config> MemoryStackSubstate<'config> {
 		false
 	}
 
-	pub fn created(&self, address: H160) -> bool {
-		if self.creates.contains(&address) {
-			return true;
-		}
-
-		if let Some(parent) = self.parent.as_ref() {
-			return parent.created(address);
-		}
-
-		false
-	}
-
 	#[allow(clippy::map_entry)]
 	fn account_mut<B: Backend>(&mut self, address: H160, backend: &B) -> &mut MemoryStackAccount {
 		if !self.accounts.contains_key(&address) {
@@ -360,6 +349,18 @@ impl<'config> MemoryStackSubstate<'config> {
 
 	pub fn set_created(&mut self, address: H160) {
 		self.creates.insert(address);
+	}
+
+	pub fn is_created(&self, address: H160) -> bool {
+		if self.creates.contains(&address) {
+			return true;
+		}
+
+		if let Some(parent) = self.parent.as_ref() {
+			return parent.is_created(address);
+		}
+
+		false
 	}
 
 	pub fn set_code<B: Backend>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
@@ -554,10 +555,6 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 		self.substate.deleted(address)
 	}
 
-	fn created(&self, address: H160) -> bool {
-		self.substate.created(address)
-	}
-
 	fn is_cold(&self, address: H160) -> bool {
 		self.substate.is_cold(address)
 	}
@@ -588,6 +585,10 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 
 	fn set_created(&mut self, address: H160) {
 		self.substate.set_created(address)
+	}
+
+	fn is_created(&self, address: H160) -> bool {
+		self.substate.is_created(address)
 	}
 
 	fn set_code(&mut self, address: H160, code: Vec<u8>) {

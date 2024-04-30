@@ -16,8 +16,8 @@ fn short_test_file_name(name: &str) -> String {
 }
 
 pub fn run(dir: &str) {
-	// const SPEC: Option<ForkSpec> = Some(ForkSpec::Cancun);
-	const SPEC: Option<ForkSpec> = Some(ForkSpec::Shanghai);
+	const SPEC: Option<ForkSpec> = Some(ForkSpec::Cancun);
+	//const SPEC: Option<ForkSpec> = Some(ForkSpec::Shanghai);
 
 	let _ = env_logger::try_init();
 
@@ -26,10 +26,10 @@ pub fn run(dir: &str) {
 
 	let mut tests_result = TestExecutionResult::new();
 	let verbose_output = VerboseOutput {
-		verbose: true,
-		very_verbose: true,
-		verbose_failed: true,
-		print_state: true,
+		verbose: false,
+		very_verbose: false,
+		verbose_failed: false,
+		print_state: false,
 	};
 	for entry in fs::read_dir(dest).unwrap() {
 		let entry = entry.unwrap();
@@ -41,7 +41,6 @@ pub fn run(dir: &str) {
 
 		let path = entry.path();
 		let filename = path.to_str().unwrap();
-		// println!("RUM for: {}", short_test_file_name(filename));
 
 		if should_skip(&path) {
 			println!("Skipping test case {}", short_test_file_name(filename));
@@ -58,9 +57,6 @@ pub fn run(dir: &str) {
 
 		for (name, test) in test_suite {
 			let test_res = statetests::test(verbose_output.clone(), &name, test, SPEC);
-			// println!("Tests count: {}", test_res.total);
-			// println!("Failed: {}\n", test_res.failed);
-
 			tests_result.merge(test_res);
 		}
 	}
@@ -84,9 +80,12 @@ const SKIPPED_CASES: &[&str] = &[
 	"stTransactionTest/HighGasPrice",
 	"stTransactionTest/HighGasPriceParis",
 	"stCreateTest/CreateTransactionHighNonce",
+	// KZG-precompile not supported
+	"stPreCompiledContracts/precompsEIP2929Cancun",
 ];
 
 fn should_skip(path: &Path) -> bool {
+	println!("{path:?}");
 	let matches = |case: &str| {
 		let file_stem = path.file_stem().unwrap();
 		let dir_path = path.parent().unwrap();

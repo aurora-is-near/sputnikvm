@@ -184,16 +184,20 @@ fn short_test_file_name(name: &str) -> String {
 }
 
 const SKIPPED_CASES: &[&str] = &[
+	// funky test with `bigint 0x00` value in json :) not possible to happen on mainnet and require
+	// custom json parser. https://github.com/ethereum/tests/issues/971
 	"stTransactionTest/ValueOverflow",
 	"stTransactionTest/ValueOverflowParis",
-	"stTransactionTest/HighGasPrice",
-	"stTransactionTest/HighGasPriceParis",
-	"stCreateTest/CreateTransactionHighNonce",
 	// Long execution
 	"stTimeConsuming/static_Call50000_sha256",
-	"stTimeConsuming/CALLBlake2f_MaxRounds",
 	"vmPerformance/loopMul",
+	"stTimeConsuming/CALLBlake2f_MaxRounds",
+	// Skip python-specific tests
 	"Pyspecs",
+	// KZG-precompile not supported
+	"stPreCompiledContracts/precompsEIP2929Cancun",
+	"stEIP4844-blobtransactions/",
+	"stEIP3607",
 ];
 
 fn should_skip(path: &Path) -> bool {

@@ -32,7 +32,8 @@ macro_rules! log_gas {
 	($self:expr, $($arg:tt)*) => (
 	log::trace!(target: "evm", "Gasometer {} [Gas used: {}, Gas left: {}]", format_args!($($arg)*),
 	$self.total_used_gas(), $self.gas());
-	println!("   Gasometer {} [Gas used: {}, Gas left: {}]", format_args!($($arg)*), $self.total_used_gas(), $self.gas());
+	// TODOFEE
+	//println!("   Gasometer {} [Gas used: {}, Gas left: {}]", format_args!($($arg)*), $self.total_used_gas(), $self.gas());
 	);
 }
 
@@ -760,6 +761,15 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		Opcode::MLOAD | Opcode::MSTORE => Some(MemoryCost {
 			offset: stack.peek_usize(0)?,
 			len: 32,
+		}),
+
+		Opcode::MCOPY => Some(MemoryCost {
+			offset: {
+				let src = stack.peek_usize(0)?;
+				let dst = stack.peek_usize(1)?;
+				max(src, dst)
+			},
+			len: stack.peek_usize(2)?,
 		}),
 
 		Opcode::MSTORE8 => Some(MemoryCost {

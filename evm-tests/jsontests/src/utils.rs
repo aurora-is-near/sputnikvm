@@ -182,7 +182,16 @@ pub mod transaction {
 			return Err(InvalidTxReason::GasLimitReached);
 		}
 
-		let required_funds = tx.gas_limit.0 * tx.gas_price.0 + tx.value.0;
+		let required_funds = if let Some(x) = tx.gas_limit.0.checked_mul(tx.gas_price.0) {
+			if let Some(y) = x.checked_add(tx.value.0) {
+				y
+			} else {
+				return Err(InvalidTxReason::OutOfFund);
+			}
+		} else {
+			return Err(InvalidTxReason::OutOfFund);
+		};
+
 		if caller_balance < required_funds {
 			return Err(InvalidTxReason::OutOfFund);
 		}
