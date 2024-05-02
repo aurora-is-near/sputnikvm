@@ -91,7 +91,18 @@ impl<'config> MemoryStackSubstate<'config> {
 			}
 
 			let apply = {
-				let account = self.account_mut(address, backend);
+				let account = if self.is_created(address) {
+					let account = self
+						.accounts
+						.get_mut(&address)
+						.expect("New account was just inserted");
+					// Reset storage for CREATE call as initially it's always should be empty.
+					// NOTE: related to `ethereun-tests`: `stSStoreTest/InitCollisionParis.json`
+					account.reset = true;
+					account
+				} else {
+					self.account_mut(address, backend)
+				};
 
 				Apply::Modify {
 					address,
@@ -331,7 +342,6 @@ impl<'config> MemoryStackSubstate<'config> {
 		for ok in removing {
 			self.storages.remove(&(address, ok));
 		}
-
 		self.account_mut(address, backend).reset = true;
 	}
 

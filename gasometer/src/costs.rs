@@ -284,7 +284,7 @@ pub fn call_cost(
 		+ new_cost(is_call_or_staticcall, new_account, transfers_value, config)
 }
 
-pub fn address_access_cost(is_cold: bool, regular_value: u64, config: &Config) -> u64 {
+pub const fn address_access_cost(is_cold: bool, regular_value: u64, config: &Config) -> u64 {
 	if config.increase_state_access_gas {
 		if is_cold {
 			config.gas_account_access_cold

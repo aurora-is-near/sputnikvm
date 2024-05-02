@@ -176,7 +176,6 @@ impl<'config> Gasometer<'config> {
 			cost,
 			snapshot: self.snapshot(),
 		});
-		log_gas!(self, "Record cost {}", cost);
 
 		let all_gas_cost = self.total_used_gas() + cost;
 		if self.gas_limit < all_gas_cost {
@@ -185,6 +184,7 @@ impl<'config> Gasometer<'config> {
 		}
 
 		self.inner_mut()?.used_gas += cost;
+		log_gas!(self, "Record cost {}", cost);
 		Ok(())
 	}
 
@@ -763,14 +763,21 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			len: 32,
 		}),
 
-		Opcode::MCOPY => Some(MemoryCost {
-			offset: {
-				let src = stack.peek_usize(0)?;
-				let dst = stack.peek_usize(1)?;
-				max(src, dst)
-			},
-			len: stack.peek_usize(2)?,
-		}),
+		Opcode::MCOPY => {
+			let len = stack.peek_usize(2)?;
+			if len == 0 {
+				None
+			} else {
+				Some(MemoryCost {
+					offset: {
+						let src = stack.peek_usize(0)?;
+						let dst = stack.peek_usize(1)?;
+						max(src, dst)
+					},
+					len,
+				})
+			}
+		}
 
 		Opcode::MSTORE8 => Some(MemoryCost {
 			offset: stack.peek_usize(0)?,

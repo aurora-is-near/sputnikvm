@@ -713,6 +713,8 @@ impl FromStr for EthereumBuiltin {
 
 impl Implementation for EthereumBuiltin {
 	fn execute(&self, input: &[u8], output: &mut BytesRef) -> Result<(), &'static str> {
+		// TODOFEE
+		// println!("# EXECUTE precompile");
 		match self {
 			Self::Identity(inner) => inner.execute(input, output),
 			Self::EcRecover(inner) => inner.execute(input, output),

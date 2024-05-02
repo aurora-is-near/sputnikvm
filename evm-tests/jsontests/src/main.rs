@@ -196,7 +196,8 @@ const SKIPPED_CASES: &[&str] = &[
 	"Pyspecs",
 	// KZG-precompile not supported
 	"stPreCompiledContracts/precompsEIP2929Cancun",
-	"stEIP4844-blobtransactions/",
+	"stPreCompiledContracts/idPrecomps",
+	"stEIP4844-blobtransactions",
 	"stEIP3607",
 ];
 

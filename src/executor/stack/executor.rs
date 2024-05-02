@@ -640,8 +640,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 
 		let transaction_cost = gasometer::call_transaction_cost(&data, &access_list);
-		// TODOFEE
-		// println!("transaction_cost: {transaction_cost:?}");
 		let gasometer = &mut self.state.metadata_mut().gasometer;
 		match gasometer.record_transaction(transaction_cost) {
 			Ok(()) => (),
@@ -1168,7 +1166,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		}
 
 		// TODOFEE
-		// println!("OPCODE: {opcode:?}");
+		//println!("OPCODE: {opcode:?}");
 		if let Some(cost) = gasometer::static_opcode_cost(opcode) {
 			self.state
 				.metadata_mut()

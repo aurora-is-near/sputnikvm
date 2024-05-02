@@ -82,6 +82,7 @@ const SKIPPED_CASES: &[&str] = &[
 	"stCreateTest/CreateTransactionHighNonce",
 	// KZG-precompile not supported
 	"stPreCompiledContracts/precompsEIP2929Cancun",
+	"stPreCompiledContracts/idPrecomps",
 ];
 
 fn should_skip(path: &Path) -> bool {

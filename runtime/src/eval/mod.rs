@@ -51,10 +51,7 @@ pub fn eval<H: Handler>(state: &mut Runtime, opcode: Opcode, handler: &mut H) ->
 		Opcode::LOG3 => system::log(state, 3, handler),
 		Opcode::LOG4 => system::log(state, 4, handler),
 		Opcode::SUICIDE => system::selfdestruct(state, handler),
-		Opcode::CREATE => {
-			let res = system::create(state, false, handler);
-			res
-		}
+		Opcode::CREATE => system::create(state, false, handler),
 		Opcode::CREATE2 => system::create(state, true, handler),
 		Opcode::CALL => system::call(state, CallScheme::Call, handler),
 		Opcode::CALLCODE => system::call(state, CallScheme::CallCode, handler),
