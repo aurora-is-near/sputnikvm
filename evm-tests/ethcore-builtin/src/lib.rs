@@ -469,15 +469,19 @@ pub trait PointScalarLength: Copy + Clone + std::fmt::Debug + Send + Sync {
 	/// Length itself
 	const LENGTH: usize;
 }
+
 /// Marker trait that indicated that we perform operations in G1
 #[derive(Clone, Copy, Debug)]
 pub struct G1Marker;
+
 impl PointScalarLength for G1Marker {
 	const LENGTH: usize = SERIALIZED_G1_POINT_BYTE_LENGTH + SCALAR_BYTE_LENGTH;
 }
+
 /// Marker trait that indicated that we perform operations in G2
 #[derive(Clone, Copy, Debug)]
 pub struct G2Marker;
+
 impl PointScalarLength for G2Marker {
 	const LENGTH: usize = SERIALIZED_G2_POINT_BYTE_LENGTH + SCALAR_BYTE_LENGTH;
 }
@@ -681,6 +685,7 @@ enum EthereumBuiltin {
 	Bls12MapFpToG1(Bls12MapFpToG1),
 	/// bls12_381 fp2 to g2 mapping
 	Bls12MapFp2ToG2(Bls12MapFp2ToG2),
+	Kgz(Kzg),
 }
 
 impl FromStr for EthereumBuiltin {
@@ -706,6 +711,7 @@ impl FromStr for EthereumBuiltin {
 			"bls12_381_pairing" => Ok(Self::Bls12Pairing(Bls12Pairing)),
 			"bls12_381_fp_to_g1" => Ok(Self::Bls12MapFpToG1(Bls12MapFpToG1)),
 			"bls12_381_fp2_to_g2" => Ok(Self::Bls12MapFp2ToG2(Bls12MapFp2ToG2)),
+			"kzg" => Ok(Self::Kgz(Kzg)),
 			_ => Err(()),
 		}
 	}
@@ -713,8 +719,6 @@ impl FromStr for EthereumBuiltin {
 
 impl Implementation for EthereumBuiltin {
 	fn execute(&self, input: &[u8], output: &mut BytesRef) -> Result<(), &'static str> {
-		// TODOFEE
-		// println!("# EXECUTE precompile");
 		match self {
 			Self::Identity(inner) => inner.execute(input, output),
 			Self::EcRecover(inner) => inner.execute(input, output),
@@ -734,6 +738,7 @@ impl Implementation for EthereumBuiltin {
 			Self::Bls12Pairing(inner) => inner.execute(input, output),
 			Self::Bls12MapFpToG1(inner) => inner.execute(input, output),
 			Self::Bls12MapFp2ToG2(inner) => inner.execute(input, output),
+			Self::Kgz(inner) => inner.execute(input, output),
 		}
 	}
 }
@@ -809,6 +814,10 @@ pub struct Bls12MapFpToG1;
 #[derive(Debug)]
 /// The Bls12MapFp2ToG2 builtin.
 pub struct Bls12MapFp2ToG2;
+
+#[derive(Debug)]
+/// The Kzg builtin
+pub struct Kzg;
 
 impl Implementation for Identity {
 	fn execute(&self, input: &[u8], output: &mut BytesRef) -> Result<(), &'static str> {
@@ -1322,6 +1331,13 @@ impl Implementation for Bls12MapFp2ToG2 {
 				Err("Bls12MapFp2ToG2 error")
 			}
 		}
+	}
+}
+
+impl Implementation for Kzg {
+	fn execute(&self, _input: &[u8], _output: &mut BytesRef) -> Result<(), &'static str> {
+		// TODO: kzg
+		Ok(())
 	}
 }
 

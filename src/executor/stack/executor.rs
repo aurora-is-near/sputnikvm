@@ -803,7 +803,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		});
 
 		if let Some(depth) = self.state.metadata().depth {
-			if depth > self.config.call_stack_limit {
+			if depth + 1 > self.config.call_stack_limit {
 				return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
 			}
 		}
@@ -1166,7 +1166,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		}
 
 		// TODOFEE
-		//println!("OPCODE: {opcode:?}");
+		// println!("OPCODE: {opcode:?}");
 		if let Some(cost) = gasometer::static_opcode_cost(opcode) {
 			self.state
 				.metadata_mut()

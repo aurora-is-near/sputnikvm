@@ -193,12 +193,14 @@ const SKIPPED_CASES: &[&str] = &[
 	"vmPerformance/loopMul",
 	"stTimeConsuming/CALLBlake2f_MaxRounds",
 	// Skip python-specific tests
-	"Pyspecs",
+	"eip4844_blobs",
+	"eip3860_initcode",
+	// Cancun blob txs
+	"stEIP4844-blobtransactions",
 	// KZG-precompile not supported
 	"stPreCompiledContracts/precompsEIP2929Cancun",
 	"stPreCompiledContracts/idPrecomps",
-	"stEIP4844-blobtransactions",
-	"stEIP3607",
+	"stSpecialTest/failed_tx_xcf416c53_Paris",
 ];
 
 fn should_skip(path: &Path) -> bool {

@@ -97,7 +97,7 @@ impl<'config> MemoryStackSubstate<'config> {
 						.get_mut(&address)
 						.expect("New account was just inserted");
 					// Reset storage for CREATE call as initially it's always should be empty.
-					// NOTE: related to `ethereun-tests`: `stSStoreTest/InitCollisionParis.json`
+					// NOTE: related to `ethereum-tests`: `stSStoreTest/InitCollisionParis.json`
 					account.reset = true;
 					account
 				} else {

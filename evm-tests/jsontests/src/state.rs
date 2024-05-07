@@ -329,6 +329,10 @@ fn test_run(
 		let caller_balance = original_state
 			.get(&caller)
 			.map_or_else(U256::zero, |acc| acc.balance);
+		// EIP-3607
+		let caller_code = original_state
+			.get(&caller)
+			.map_or_else(Vec::new, |acc| acc.code.clone());
 
 		for (i, state) in states.iter().enumerate() {
 			// TODOFEE
@@ -386,25 +390,33 @@ fn test_run(
 					.map(|(address, keys)| (address.0, keys.into_iter().map(|k| k.0).collect()))
 					.collect();
 
-				match transaction.to {
-					ethjson::maybe::MaybeEmpty::Some(to) => {
-						let value = transaction.value.into();
+				// EIP-3607: Reject transactions from senders with deployed code
+				if caller_code.is_empty() {
+					match transaction.to {
+						ethjson::maybe::MaybeEmpty::Some(to) => {
+							let value = transaction.value.into();
 
-						let _reason = executor.transact_call(
-							caller,
-							to.into(),
-							value,
-							data,
-							gas_limit,
-							access_list,
-						);
-					}
-					ethjson::maybe::MaybeEmpty::None => {
-						let code = data;
-						let value = transaction.value.into();
+							let _reason = executor.transact_call(
+								caller,
+								to.into(),
+								value,
+								data,
+								gas_limit,
+								access_list,
+							);
+						}
+						ethjson::maybe::MaybeEmpty::None => {
+							let code = data;
+							let value = transaction.value.into();
 
-						let _reason =
-							executor.transact_create(caller, value, code, gas_limit, access_list);
+							let _reason = executor.transact_create(
+								caller,
+								value,
+								code,
+								gas_limit,
+								access_list,
+							);
+						}
 					}
 				}
 
