@@ -485,10 +485,6 @@ fn test_run(
 			.map_or_else(Vec::new, |acc| acc.code.clone());
 
 		for (i, state) in states.iter().enumerate() {
-			// TODOFEE
-			// if i != 1 {
-			// 	continue;
-			// }
 			let transaction = test.0.transaction.select(&state.indexes);
 			let mut backend = MemoryBackend::new(&vicinity, original_state.clone());
 
