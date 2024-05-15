@@ -188,7 +188,7 @@ const SKIPPED_CASES: &[&str] = &[
 	// custom json parser. https://github.com/ethereum/tests/issues/971
 	"stTransactionTest/ValueOverflow",
 	"stTransactionTest/ValueOverflowParis",
-	// Long execution
+	// These tests are passing, but they take a lot of time to execute so we are going to skip them.
 	"stTimeConsuming/static_Call50000_sha256",
 	"vmPerformance/loopMul",
 	"stTimeConsuming/CALLBlake2f_MaxRounds",
@@ -197,10 +197,6 @@ const SKIPPED_CASES: &[&str] = &[
 	"eip3860_initcode",
 	// Cancun blob txs
 	"stEIP4844-blobtransactions",
-	// KZG-precompile not supported
-	"stPreCompiledContracts/precompsEIP2929Cancun",
-	"stPreCompiledContracts/idPrecomps",
-	"stSpecialTest/failed_tx_xcf416c53_Paris",
 ];
 
 fn should_skip(path: &Path) -> bool {

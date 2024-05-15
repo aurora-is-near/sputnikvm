@@ -1,5 +1,8 @@
 use crate::utils::*;
-use ethjson::spec::ForkSpec;
+use ethjson::hash::Address;
+use ethjson::spec::builtin::{AltBn128ConstOperations, AltBn128Pairing, PricingAt};
+use ethjson::spec::{ForkSpec, Pricing};
+use ethjson::uint::Uint;
 use evm::backend::{ApplyBackend, MemoryAccount, MemoryBackend, MemoryVicinity};
 use evm::executor::stack::{
 	MemoryStackState, PrecompileFailure, PrecompileFn, PrecompileOutput, StackExecutor,
@@ -154,6 +157,10 @@ lazy_static! {
 		JsonPrecompile::builtins("./res/berlin_builtins.json");
 }
 
+lazy_static! {
+	static ref CANCUN_BUILTINS: BTreeMap<H160, ethcore_builtin::Builtin> = cancun_builtins();
+}
+
 macro_rules! precompile_entry {
 	($map:expr, $builtins:expr, $index:expr) => {
 		let x: PrecompileFn =
@@ -204,7 +211,20 @@ impl JsonPrecompile {
 			ForkSpec::Paris => Self::precompile(&ForkSpec::Berlin),
 			// precompiles for Shanghai and Berlin are the same
 			ForkSpec::Shanghai => Self::precompile(&ForkSpec::Berlin),
-			ForkSpec::Cancun => Self::precompile(&ForkSpec::Berlin),
+			ForkSpec::Cancun => {
+				let mut map = BTreeMap::new();
+				precompile_entry!(map, CANCUN_BUILTINS, 1);
+				precompile_entry!(map, CANCUN_BUILTINS, 2);
+				precompile_entry!(map, CANCUN_BUILTINS, 3);
+				precompile_entry!(map, CANCUN_BUILTINS, 4);
+				precompile_entry!(map, CANCUN_BUILTINS, 5);
+				precompile_entry!(map, CANCUN_BUILTINS, 6);
+				precompile_entry!(map, CANCUN_BUILTINS, 7);
+				precompile_entry!(map, CANCUN_BUILTINS, 8);
+				precompile_entry!(map, CANCUN_BUILTINS, 9);
+				precompile_entry!(map, CANCUN_BUILTINS, 0xA);
+				Some(map)
+			}
 			_ => None,
 		}
 	}
@@ -253,6 +273,136 @@ impl JsonPrecompile {
 			}),
 		}
 	}
+}
+
+fn cancun_builtins() -> BTreeMap<H160, ethcore_builtin::Builtin> {
+	use ethjson::spec::builtin::{BuiltinCompat, Linear, Modexp, PricingCompat};
+
+	let builtins: BTreeMap<Address, BuiltinCompat> = BTreeMap::from([
+		(
+			Address(H160::from_low_u64_be(1)),
+			BuiltinCompat {
+				name: "ecrecover".to_string(),
+				pricing: PricingCompat::Single(Pricing::Linear(Linear {
+					base: 3000,
+					word: 0,
+				})),
+				activate_at: None,
+			},
+		),
+		(
+			Address(H160::from_low_u64_be(2)),
+			BuiltinCompat {
+				name: "sha256".to_string(),
+				pricing: PricingCompat::Single(Pricing::Linear(Linear { base: 60, word: 12 })),
+				activate_at: None,
+			},
+		),
+		(
+			Address(H160::from_low_u64_be(3)),
+			BuiltinCompat {
+				name: "ripemd160".to_string(),
+				pricing: PricingCompat::Single(Pricing::Linear(Linear {
+					base: 600,
+					word: 120,
+				})),
+				activate_at: None,
+			},
+		),
+		(
+			Address(H160::from_low_u64_be(4)),
+			BuiltinCompat {
+				name: "identity".to_string(),
+				pricing: PricingCompat::Single(Pricing::Linear(Linear { base: 15, word: 3 })),
+				activate_at: None,
+			},
+		),
+		(
+			Address(H160::from_low_u64_be(5)),
+			BuiltinCompat {
+				name: "modexp".to_string(),
+				pricing: PricingCompat::Single(Pricing::Modexp(Modexp {
+					divisor: 3,
+					is_eip_2565: true,
+				})),
+				activate_at: Some(Uint(U256::zero())),
+			},
+		),
+		(
+			Address(H160::from_low_u64_be(6)),
+			BuiltinCompat {
+				name: "alt_bn128_add".to_string(),
+				pricing: PricingCompat::Multi(BTreeMap::from([(
+					Uint(U256::zero()),
+					PricingAt {
+						info: Some("EIP 1108 transition".to_string()),
+						price: Pricing::AltBn128ConstOperations(AltBn128ConstOperations {
+							price: 150,
+						}),
+					},
+				)])),
+				activate_at: None,
+			},
+		),
+		(
+			Address(H160::from_low_u64_be(7)),
+			BuiltinCompat {
+				name: "alt_bn128_mul".to_string(),
+				pricing: PricingCompat::Multi(BTreeMap::from([(
+					Uint(U256::zero()),
+					PricingAt {
+						info: Some("EIP 1108 transition".to_string()),
+						price: Pricing::AltBn128ConstOperations(AltBn128ConstOperations {
+							price: 6000,
+						}),
+					},
+				)])),
+				activate_at: None,
+			},
+		),
+		(
+			Address(H160::from_low_u64_be(8)),
+			BuiltinCompat {
+				name: "alt_bn128_pairing".to_string(),
+				pricing: PricingCompat::Multi(BTreeMap::from([(
+					Uint(U256::zero()),
+					PricingAt {
+						info: Some("EIP 1108 transition".to_string()),
+						price: Pricing::AltBn128Pairing(AltBn128Pairing {
+							base: 45000,
+							pair: 34000,
+						}),
+					},
+				)])),
+				activate_at: None,
+			},
+		),
+		(
+			Address(H160::from_low_u64_be(9)),
+			BuiltinCompat {
+				name: "blake2_f".to_string(),
+				pricing: PricingCompat::Single(Pricing::Blake2F { gas_per_round: 1 }),
+				activate_at: Some(Uint(U256::zero())),
+			},
+		),
+		(
+			Address(H160::from_low_u64_be(0xA)),
+			BuiltinCompat {
+				name: "kzg".to_string(),
+				pricing: PricingCompat::Empty,
+				activate_at: None,
+			},
+		),
+	]);
+	builtins
+		.into_iter()
+		.map(|(address, builtin)| {
+			(
+				address.into(),
+				ethjson::spec::Builtin::from(builtin).try_into().unwrap(),
+			)
+		})
+		.collect()
 }
 
 pub fn test(

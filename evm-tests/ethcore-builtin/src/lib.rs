@@ -18,6 +18,8 @@
 
 #![warn(missing_docs)]
 
+mod kzg;
+
 use std::{
 	cmp::{max, min},
 	collections::BTreeMap,
@@ -535,6 +537,7 @@ pub type Bls12MultiexpPricerG2 = Bls12MultiexpPricer<G2Marker>;
 ///
 /// Call `cost` to compute cost for the given input, `execute` to execute the contract
 /// on the given input, and `is_active` to determine whether the contract is active.
+#[derive(Debug)]
 pub struct Builtin {
 	pricer: BTreeMap<u64, Pricing>,
 	native: EthereumBuiltin,
@@ -647,6 +650,7 @@ impl From<ethjson::spec::builtin::Pricing> for Pricing {
 	}
 }
 
+#[derive(Debug)]
 /// Ethereum builtins:
 enum EthereumBuiltin {
 	/// The identity function
@@ -1335,8 +1339,30 @@ impl Implementation for Bls12MapFp2ToG2 {
 }
 
 impl Implementation for Kzg {
-	fn execute(&self, _input: &[u8], _output: &mut BytesRef) -> Result<(), &'static str> {
-		// TODO: kzg
+	fn execute(&self, input: &[u8], output: &mut BytesRef) -> Result<(), &'static str> {
+		// Verify input length.
+		if input.len() != 192 {
+			return Err("BlobInvalidInputLength");
+		}
+		if output.is_empty() {
+			return Err("BlobInvalidOutputLength");
+		}
+		// Verify commitment matches versioned_hash
+		let versioned_hash = &input[..32];
+		let commitment = &input[96..144];
+		if kzg::kzg_to_versioned_hash(commitment) != versioned_hash {
+			return Err("BlobMismatchedVersion");
+		}
+		// Verify KZG proof with z and y in big endian format
+		let commitment = kzg::as_bytes48(commitment);
+		let z = kzg::as_bytes32(&input[32..64]);
+		let y = kzg::as_bytes32(&input[64..96]);
+		let proof = kzg::as_bytes48(&input[144..192]);
+		let kzg_settings = kzg::EnvKzgSettings::Default;
+		if !kzg::verify_kzg_proof(commitment, z, y, proof, &kzg_settings.get()) {
+			return Err("BlobVerifyKzgProofFailed");
+		}
+		output.copy_from_slice(kzg::RETURN_VALUE.as_slice());
 		Ok(())
 	}
 }
