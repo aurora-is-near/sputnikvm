@@ -571,11 +571,12 @@ fn test_run(
 									ExitReason::Error(ref e) => match e {
 										ExitError::CreateContractLimit => {
 											// Check error message for EIP-3860
-											assert_eq!(
-												expect_exception,
-												"TransactionException.INITCODE_SIZE_EXCEEDED"
+											let check_result = matches!(
+												expect_exception.as_str(),
+												"TR_InitCodeLimitExceeded"
+													| "TransactionException.INITCODE_SIZE_EXCEEDED"
 											);
-
+											assert!(check_result, "message: {expect_exception}");
 											continue;
 										}
 										_ => (),
