@@ -426,6 +426,24 @@ pub fn test(
 	child.join().unwrap()
 }
 
+/// Check Exit Reason of EVM execution
+fn check_create_exit_reason(reason: &ExitReason, expect_exception: &Option<String>) -> bool {
+	if let Some(expect_exception) = expect_exception {
+		if matches!(reason, ExitReason::Error(ExitError::CreateContractLimit)) {
+			let exception: &str = expect_exception.as_ref();
+			let check_result = exception == "TR_InitCodeLimitExceeded"
+				|| exception == "TransactionException.INITCODE_SIZE_EXCEEDED";
+			assert!(
+				check_result,
+				"message: {exception}\nbut expected init code limit exceeded"
+			);
+			return true;
+		}
+	}
+	false
+}
+
+#[allow(clippy::cognitive_complexity)]
 fn test_run(
 	verbose_output: &VerboseOutput,
 	name: &str,
@@ -566,23 +584,9 @@ fn test_run(
 								gas_limit,
 								access_list,
 							);
-							if let Some(expect_exception) = state.expect_exception.as_ref() {
-								match reason.0 {
-									ExitReason::Error(ref e) => match e {
-										ExitError::CreateContractLimit => {
-											// Check error message for EIP-3860
-											let check_result = matches!(
-												expect_exception.as_str(),
-												"TR_InitCodeLimitExceeded"
-													| "TransactionException.INITCODE_SIZE_EXCEEDED"
-											);
-											assert!(check_result, "message: {expect_exception}");
-											continue;
-										}
-										_ => (),
-									},
-									_ => (),
-								}
+							if check_create_exit_reason(&reason.0, &state.expect_exception) {
+								println!(" [{:?}]  {}:{}", spec, name, i);
+								continue;
 							}
 						}
 					}

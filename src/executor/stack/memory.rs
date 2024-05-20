@@ -428,7 +428,7 @@ impl<'config> MemoryStackSubstate<'config> {
 		self.account_mut(address, backend);
 	}
 
-	pub fn get_tstorage(&mut self, address: H160, key: H256) -> U256 {
+	pub fn get_tstorage(&self, address: H160, key: H256) -> U256 {
 		self.known_tstorage(address, key).unwrap_or_default()
 	}
 
