@@ -428,9 +428,8 @@ pub fn test(
 
 /// Check Exit Reason of EVM execution
 fn check_create_exit_reason(reason: &ExitReason, expect_exception: &Option<String>) -> bool {
-	if let Some(expect_exception) = expect_exception {
+	if let Some(exception) = expect_exception.as_deref() {
 		if matches!(reason, ExitReason::Error(ExitError::CreateContractLimit)) {
-			let exception: &str = expect_exception.as_ref();
 			let check_result = exception == "TR_InitCodeLimitExceeded"
 				|| exception == "TransactionException.INITCODE_SIZE_EXCEEDED";
 			assert!(
