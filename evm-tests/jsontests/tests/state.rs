@@ -74,19 +74,9 @@ const SKIPPED_CASES: &[&str] = &[
 	// running the test.
 	"stTransactionTest/ValueOverflow",
 	"stTransactionTest/ValueOverflowParis",
-	// The below test cases are failing in geth too and as such are
-	// skipped here until they are fixed there (otherwise we don't know
-	// what the expected value should be for each test output).
-	"stTransactionTest/HighGasPrice",
-	"stTransactionTest/HighGasPriceParis",
-	"stCreateTest/CreateTransactionHighNonce",
-	// KZG-precompile not supported
-	"stPreCompiledContracts/precompsEIP2929Cancun",
-	"stPreCompiledContracts/idPrecomps",
 ];
 
 fn should_skip(path: &Path) -> bool {
-	println!("{path:?}");
 	let matches = |case: &str| {
 		let file_stem = path.file_stem().unwrap();
 		let dir_path = path.parent().unwrap();
