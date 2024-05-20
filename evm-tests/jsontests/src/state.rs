@@ -585,7 +585,6 @@ fn test_run(
 								access_list,
 							);
 							if check_create_exit_reason(&reason.0, &state.expect_exception) {
-								println!(" [{:?}]  {}:{}", spec, name, i);
 								continue;
 							}
 						}
