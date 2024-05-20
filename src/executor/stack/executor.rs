@@ -122,7 +122,7 @@ impl<'config> StackSubstateMetadata<'config> {
 		Ok(())
 	}
 
-	pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
+	pub fn swallow_discard(&self, _other: Self) -> Result<(), ExitError> {
 		Ok(())
 	}
 

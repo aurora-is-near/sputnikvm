@@ -2189,7 +2189,7 @@ mod tests {
 		assert_eq!(b.cost(&[0; 1], 99), U256::from(6_000), "use price #2");
 		assert_eq!(b.cost(&[0; 1], 100), U256::from(1_337), "use price #3");
 		assert_eq!(
-			b.cost(&[0; 1], u64::max_value()),
+			b.cost(&[0; 1], u64::MAX),
 			U256::from(1_337),
 			"use price #3 indefinitely"
 		);

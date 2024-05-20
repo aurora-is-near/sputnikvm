@@ -194,7 +194,6 @@ const SKIPPED_CASES: &[&str] = &[
 	"stTimeConsuming/CALLBlake2f_MaxRounds",
 	// Skip python-specific tests
 	"eip4844_blobs",
-	"eip3860_initcode",
 	// Cancun blob txs
 	"stEIP4844-blobtransactions",
 ];

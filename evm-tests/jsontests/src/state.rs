@@ -8,7 +8,7 @@ use evm::executor::stack::{
 	MemoryStackState, PrecompileFailure, PrecompileFn, PrecompileOutput, StackExecutor,
 	StackSubstateMetadata,
 };
-use evm::{Config, Context, ExitError, ExitSucceed};
+use evm::{Config, Context, ExitError, ExitReason, ExitSucceed};
 use lazy_static::lazy_static;
 use libsecp256k1::SecretKey;
 use primitive_types::{H160, H256, U256};
@@ -426,6 +426,23 @@ pub fn test(
 	child.join().unwrap()
 }
 
+/// Check Exit Reason of EVM execution
+fn check_create_exit_reason(reason: &ExitReason, expect_exception: &Option<String>) -> bool {
+	if let Some(exception) = expect_exception.as_deref() {
+		if matches!(reason, ExitReason::Error(ExitError::CreateContractLimit)) {
+			let check_result = exception == "TR_InitCodeLimitExceeded"
+				|| exception == "TransactionException.INITCODE_SIZE_EXCEEDED";
+			assert!(
+				check_result,
+				"message: {exception}\nbut expected init code limit exceeded"
+			);
+			return true;
+		}
+	}
+	false
+}
+
+#[allow(clippy::cognitive_complexity)]
 fn test_run(
 	verbose_output: &VerboseOutput,
 	name: &str,
@@ -555,13 +572,16 @@ fn test_run(
 							let code = data;
 							let value = transaction.value.into();
 
-							let _reason = executor.transact_create(
+							let reason = executor.transact_create(
 								caller,
 								value,
 								code,
 								gas_limit,
 								access_list,
 							);
+							if check_create_exit_reason(&reason.0, &state.expect_exception) {
+								continue;
+							}
 						}
 					}
 				}
