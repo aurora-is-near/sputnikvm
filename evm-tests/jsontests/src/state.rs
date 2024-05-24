@@ -1,4 +1,3 @@
-use crate::utils::*;
 use ethjson::hash::Address;
 use ethjson::spec::builtin::{AltBn128ConstOperations, AltBn128Pairing, PricingAt};
 use ethjson::spec::{ForkSpec, Pricing};
@@ -8,6 +7,7 @@ use evm::executor::stack::{
 	MemoryStackState, PrecompileFailure, PrecompileFn, PrecompileOutput, StackExecutor,
 	StackSubstateMetadata,
 };
+use evm::utils::{calc_blob_gas_price, calc_data_fee, calc_excess_blob_gas};
 use evm::{Config, Context, ExitError, ExitReason, ExitSucceed};
 use lazy_static::lazy_static;
 use libsecp256k1::SecretKey;
@@ -64,7 +64,7 @@ pub struct Test(ethjson::test_helpers::state::State);
 
 impl Test {
 	pub fn unwrap_to_pre_state(&self) -> BTreeMap<H160, MemoryAccount> {
-		unwrap_to_state(&self.0.pre_state)
+		crate::utils::unwrap_to_state(&self.0.pre_state)
 	}
 
 	pub fn unwrap_caller(&self) -> H160 {
@@ -79,7 +79,11 @@ impl Test {
 		H160::from(H256::from_slice(Keccak256::digest(res).as_slice()))
 	}
 
-	pub fn unwrap_to_vicinity(&self, spec: &ForkSpec) -> Option<MemoryVicinity> {
+	pub fn unwrap_to_vicinity(
+		&self,
+		spec: &ForkSpec,
+		blob_gas_price: Option<u128>,
+	) -> Option<MemoryVicinity> {
 		let block_base_fee_per_gas = self.0.env.block_base_fee_per_gas.0;
 		let gas_price = if self.0.transaction.gas_price.0.is_zero() {
 			let max_fee_per_gas = self.0.transaction.max_fee_per_gas.0;
@@ -124,11 +128,20 @@ impl Test {
 				// (0x44), and so for older forks of Ethereum, the threshold value of 2^64 is used to
 				// distinguish between the two: if it's below, the value corresponds to the DIFFICULTY
 				// opcode, otherwise to the PREVRANDAO opcode.
-				u256_to_h256(r.0)
+				crate::utils::u256_to_h256(r.0)
 			})
 		} else {
 			None
 		};
+
+		#[allow(clippy::map_clone)]
+		let blob_hashes = self
+			.0
+			.transaction
+			.blob_versioned_hashes
+			.iter()
+			.map(|v| *v)
+			.collect();
 
 		Some(MemoryVicinity {
 			gas_price,
@@ -142,7 +155,8 @@ impl Test {
 			chain_id: U256::one(),
 			block_base_fee_per_gas,
 			block_randomness,
-			blob_base_fee: self.0.env.blob_base_fee,
+			blob_gas_price,
+			blob_hashes,
 		})
 	}
 }
@@ -450,6 +464,7 @@ fn test_run(
 	specific_spec: Option<ForkSpec>,
 ) -> TestExecutionResult {
 	let mut tests_result = TestExecutionResult::new();
+	let test_tx = &test.0.transaction;
 	for (spec, states) in &test.0.post_states {
 		// Run tests for specific SPEC (Hard fork)
 		if let Some(s) = specific_spec.as_ref() {
@@ -471,13 +486,42 @@ fn test_run(
 			}
 		};
 
+		let blob_gas_price =
+			if let Some(current_excess_blob_gas) = test.0.env.current_excess_blob_gas {
+				Some(calc_blob_gas_price(current_excess_blob_gas.0.as_u64()))
+			} else if let (Some(parent_blob_gas_used), Some(parent_excess_blob_gas)) = (
+				test.0.env.parent_blob_gas_used,
+				test.0.env.parent_excess_blob_gas,
+			) {
+				let excess_blob_gas = calc_excess_blob_gas(
+					parent_blob_gas_used.0.as_u64(),
+					parent_excess_blob_gas.0.as_u64(),
+				);
+				Some(calc_blob_gas_price(excess_blob_gas))
+			} else {
+				None
+			};
+		let data_fee = if gasometer_config.has_shard_blob_transactions {
+			Some(calc_data_fee(
+				blob_gas_price.expect("should be blob_gas_price"),
+				test_tx.blob_versioned_hashes.len(),
+			))
+		} else {
+			None
+		};
+		// TODOFEE
+		// println!(
+		// 	"# data_fee: {data_fee:?} [blob_versioned_hashes: {}]",
+		// 	test_tx.blob_versioned_hashes.len()
+		// );
+
 		let original_state = test.unwrap_to_pre_state();
-		let vicinity = test.unwrap_to_vicinity(spec);
+		let vicinity = test.unwrap_to_vicinity(spec, blob_gas_price);
 		if vicinity.is_none() {
 			let h = states.first().unwrap().hash.0;
 			// if vicinity could not be computed then the transaction was invalid so we simply
 			// check the original state and move on
-			let (is_valid_hash, actual_hash) = assert_valid_hash(&h, &original_state);
+			let (is_valid_hash, actual_hash) = crate::utils::assert_valid_hash(&h, &original_state);
 			if !is_valid_hash {
 				tests_result.failed_tests.push(FailedTestDetails {
 					expected_hash: h,
@@ -506,7 +550,8 @@ fn test_run(
 			// if i != 1 {
 			// 	continue;
 			// }
-			let transaction = test.0.transaction.select(&state.indexes);
+
+			let transaction = test_tx.select(&state.indexes);
 			let mut backend = MemoryBackend::new(&vicinity, original_state.clone());
 
 			// Test case may be expected to fail with an unsupported tx type if the current fork is
@@ -529,13 +574,19 @@ fn test_run(
 
 			tests_result.total += 1;
 
-			// Only execute valid transactions
-			if let Ok(transaction) = crate::utils::transaction::validate(
+			let x = crate::utils::transaction::validate(
 				transaction,
 				test.0.env.gas_limit.0,
 				caller_balance,
 				&gasometer_config,
-			) {
+				test_tx,
+				blob_gas_price,
+			);
+			// TODOFEE
+			// println!("X: {x:#?}");
+
+			// Only execute valid transactions
+			if let Ok(transaction) = x {
 				let gas_limit: u64 = transaction.gas_limit.into();
 				let data: Vec<u8> = transaction.data.into();
 				let metadata =
@@ -547,9 +598,19 @@ fn test_run(
 					&gasometer_config,
 					&precompile,
 				);
-				let total_fee = vicinity.gas_price * gas_limit;
 
-				executor.state_mut().withdraw(caller, total_fee).unwrap();
+				let total_fee = if let Some(data_fee) = data_fee {
+					vicinity.gas_price * gas_limit + data_fee
+				} else {
+					vicinity.gas_price * gas_limit
+				};
+
+				if let Err(res) = executor.state_mut().withdraw(caller, total_fee) {
+					if matches!(res, ExitError::OutOfFund) {
+						println!("OutOfFund");
+						continue;
+					}
+				}
 
 				let access_list = transaction
 					.access_list
@@ -571,6 +632,8 @@ fn test_run(
 								gas_limit,
 								access_list,
 							);
+							// TODOFEE
+							// println!("REASON: {_reason:#?}");
 						}
 						ethjson::maybe::MaybeEmpty::None => {
 							let code = data;
@@ -586,6 +649,8 @@ fn test_run(
 							if check_create_exit_reason(&reason.0, &state.expect_exception) {
 								continue;
 							}
+							// TODOFEE
+							// println!("REASON: {reason:#?}");
 						}
 					}
 				}
@@ -614,13 +679,21 @@ fn test_run(
 				executor
 					.state_mut()
 					.deposit(vicinity.block_coinbase, miner_reward);
-				executor.state_mut().deposit(caller, total_fee - actual_fee);
+
+				let amount_to_return_for_caller = data_fee.map_or_else(
+					|| total_fee - actual_fee,
+					|data_fee| total_fee - actual_fee - data_fee,
+				);
+				executor
+					.state_mut()
+					.deposit(caller, amount_to_return_for_caller);
 
 				let (values, logs) = executor.into_state().deconstruct();
 
 				backend.apply(values, logs, delete_empty);
 			}
-			let (is_valid_hash, actual_hash) = assert_valid_hash(&state.hash.0, backend.state());
+			let (is_valid_hash, actual_hash) =
+				crate::utils::assert_valid_hash(&state.hash.0, backend.state());
 			if !is_valid_hash {
 				let failed_res = FailedTestDetails {
 					expected_hash: state.hash.0,

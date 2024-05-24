@@ -157,10 +157,13 @@ pub fn flush() {
 }
 
 pub mod transaction {
+	use ethjson::hash::Address;
 	use ethjson::maybe::MaybeEmpty;
+	use ethjson::test_helpers::state::MultiTransaction;
 	use ethjson::transaction::Transaction;
 	use ethjson::uint::Uint;
 	use evm::gasometer::{self, Gasometer};
+	use evm::utils::{MAX_BLOB_NUMBER_PER_BLOCK, VERSIONED_HASH_VERSION_KZG};
 	use primitive_types::{H160, H256, U256};
 
 	pub fn validate(
@@ -168,6 +171,8 @@ pub mod transaction {
 		block_gas_limit: U256,
 		caller_balance: U256,
 		config: &evm::Config,
+		test_tx: &MultiTransaction,
+		blob_gas_price: Option<u128>,
 	) -> Result<Transaction, InvalidTxReason> {
 		match intrinsic_gas(&tx, config) {
 			None => return Err(InvalidTxReason::IntrinsicGas),
@@ -194,6 +199,47 @@ pub mod transaction {
 
 		if caller_balance < required_funds {
 			return Err(InvalidTxReason::OutOfFund);
+		}
+
+		// CANCUN tx validation
+		// Presence of max_fee_per_blob_gas means that this is blob transaction.
+		if let Some(max) = test_tx.max_fee_per_blob_gas {
+			// ensure that the user was willing to at least pay the current blob gasprice
+			if U256::from(blob_gas_price.expect("expect blob_gas_price")) > max.0 {
+				return Err(InvalidTxReason::BlobGasPriceGreaterThanMax);
+			}
+
+			// there must be at least one blob
+			if test_tx.blob_versioned_hashes.is_empty() {
+				return Err(InvalidTxReason::EmptyBlobs);
+			}
+
+			// The field `to` deviates slightly from the semantics with the exception
+			// that it MUST NOT be nil and therefore must always represent
+			// a 20-byte address. This means that blob transactions cannot
+			// have the form of a create transaction.
+			let to_address: Option<Address> = test_tx.to.clone().into();
+			if to_address.is_none() {
+				return Err(InvalidTxReason::BlobCreateTransaction);
+			}
+
+			// all versioned blob hashes must start with VERSIONED_HASH_VERSION_KZG
+			for blob in test_tx.blob_versioned_hashes.iter() {
+				let mut blob_hash = H256([0; 32]);
+				blob.to_big_endian(&mut blob_hash[..]);
+
+				// TODOFEE
+				println!("{:#?}-{VERSIONED_HASH_VERSION_KZG:?}", blob_hash[0]);
+				if blob_hash[0] != VERSIONED_HASH_VERSION_KZG {
+					return Err(InvalidTxReason::BlobVersionNotSupported);
+				}
+			}
+
+			// ensure the total blob gas spent is at most equal to the limit
+			// assert blob_gas_used <= MAX_BLOB_GAS_PER_BLOCK
+			if test_tx.blob_versioned_hashes.len() > MAX_BLOB_NUMBER_PER_BLOCK as usize {
+				return Err(InvalidTxReason::TooManyBlobs);
+			}
 		}
 
 		Ok(tx)
@@ -223,9 +269,15 @@ pub mod transaction {
 		Some(g.total_used_gas())
 	}
 
+	#[derive(Debug)]
 	pub enum InvalidTxReason {
 		IntrinsicGas,
 		OutOfFund,
 		GasLimitReached,
+		BlobCreateTransaction,
+		BlobVersionNotSupported,
+		TooManyBlobs,
+		EmptyBlobs,
+		BlobGasPriceGreaterThanMax,
 	}
 }

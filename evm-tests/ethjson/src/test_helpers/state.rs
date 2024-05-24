@@ -79,7 +79,7 @@ pub struct MultiTransaction {
 
 	/// EIP-4844
 	#[serde(default)]
-	pub blob_versioned_hashes: Vec<H256>,
+	pub blob_versioned_hashes: Vec<U256>,
 	/// EIP-4844
 	pub max_fee_per_blob_gas: Option<Uint>,
 }

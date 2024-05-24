@@ -193,9 +193,9 @@ const SKIPPED_CASES: &[&str] = &[
 	"vmPerformance/loopMul",
 	"stTimeConsuming/CALLBlake2f_MaxRounds",
 	// Skip python-specific tests
-	"eip4844_blobs",
+	// "eip4844_blobs",
 	// Cancun blob txs
-	"stEIP4844-blobtransactions",
+	// "stEIP4844-blobtransactions",
 ];
 
 fn should_skip(path: &Path) -> bool {

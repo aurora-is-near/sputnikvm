@@ -41,7 +41,8 @@ impl Test {
 			chain_id: U256::zero(),
 			block_base_fee_per_gas: self.0.transaction.gas_price.into(),
 			block_randomness,
-			blob_base_fee: None,
+			blob_gas_price: None,
+			blob_hashes: Vec::new(),
 		}
 	}
 

@@ -64,12 +64,30 @@ pub fn fake_exponential(factor: u64, numerator: u64, denominator: u64) -> u128 {
 /// See also [the EIP-4844 helpers](https://eips.ethereum.org/EIPS/eip-4844#helpers)
 /// (`get_blob_gasprice`).
 #[inline]
-pub fn calc_blob_gasprice(excess_blob_gas: u64) -> u128 {
+pub fn calc_blob_gas_price(excess_blob_gas: u64) -> u128 {
 	fake_exponential(
 		MIN_BLOB_GASPRICE,
 		excess_blob_gas,
 		BLOB_GASPRICE_UPDATE_FRACTION,
 	)
+}
+
+/// Calculates the [EIP-4844] `data_fee` of the transaction.
+///
+/// Returns `None` if `Cancun` is not enabled. This is enforced in [`Env::validate_block_env`].
+///
+/// [EIP-4844]: https://eips.ethereum.org/EIPS/eip-4844
+#[inline]
+pub fn calc_data_fee(blob_gas_price: u128, blob_hashes_len: usize) -> U256 {
+	U256::from(blob_gas_price).saturating_mul(U256::from(get_total_blob_gas(blob_hashes_len)))
+}
+
+/// See [EIP-4844], [`calc_data_fee`]
+///
+/// [EIP-4844]: https://eips.ethereum.org/EIPS/eip-4844
+#[inline]
+pub const fn get_total_blob_gas(blob_hashes_len: usize) -> u64 {
+	GAS_PER_BLOB * blob_hashes_len as u64
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
