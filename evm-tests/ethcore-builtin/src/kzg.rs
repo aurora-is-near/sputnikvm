@@ -4,6 +4,7 @@ use core::hash::{Hash, Hasher};
 use derive_more::{AsMut, AsRef, Deref, DerefMut};
 use hex_literal::hex;
 use sha2::Digest;
+use std::convert::TryFrom;
 use std::rc::Rc;
 
 pub const RETURN_VALUE: &[u8; 64] = &hex!(
@@ -162,15 +163,52 @@ pub fn kzg_to_versioned_hash(commitment: &[u8]) -> [u8; 32] {
 	hash
 }
 
-#[inline]
-pub fn verify_kzg_proof(
-	commitment: &Bytes48,
-	z: &Bytes32,
-	y: &Bytes32,
-	proof: &Bytes48,
-	kzg_settings: &KzgSettings,
-) -> bool {
-	KzgProof::verify_kzg_proof(commitment, z, y, proof, kzg_settings).unwrap_or(false)
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct KzgInput {
+	commitment: Bytes48,
+	z: Bytes32,
+	y: Bytes32,
+	proof: Bytes48,
+}
+
+impl KzgInput {
+	#[inline]
+	pub fn verify_kzg_proof(&self, kzg_settings: &KzgSettings) -> bool {
+		KzgProof::verify_kzg_proof(
+			&self.commitment,
+			&self.z,
+			&self.y,
+			&self.proof,
+			kzg_settings,
+		)
+		.unwrap_or(false)
+	}
+}
+
+impl TryFrom<&[u8]> for KzgInput {
+	type Error = &'static str;
+
+	fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
+		if input.len() != 192 {
+			return Err("BlobInvalidInputLength");
+		}
+		// Verify commitment matches versioned_hash
+		let versioned_hash = &input[..32];
+		let commitment = &input[96..144];
+		if kzg_to_versioned_hash(commitment) != versioned_hash {
+			return Err("BlobMismatchedVersion");
+		}
+		let commitment = *as_bytes48(commitment);
+		let z = *as_bytes32(&input[32..64]);
+		let y = *as_bytes32(&input[64..96]);
+		let proof = *as_bytes48(&input[144..192]);
+		Ok(Self {
+			commitment,
+			z,
+			y,
+			proof,
+		})
+	}
 }
 
 #[inline]
@@ -179,13 +217,13 @@ fn as_array<const N: usize>(bytes: &[u8]) -> &[u8; N] {
 }
 
 #[inline]
-pub fn as_bytes32(bytes: &[u8]) -> &Bytes32 {
+fn as_bytes32(bytes: &[u8]) -> &Bytes32 {
 	// SAFETY: `#[repr(C)] Bytes32([u8; 32])`
 	unsafe { &*as_array::<32>(bytes).as_ptr().cast() }
 }
 
 #[inline]
-pub fn as_bytes48(bytes: &[u8]) -> &Bytes48 {
+fn as_bytes48(bytes: &[u8]) -> &Bytes48 {
 	// SAFETY: `#[repr(C)] Bytes48([u8; 48])`
 	unsafe { &*as_array::<48>(bytes).as_ptr().cast() }
 }
