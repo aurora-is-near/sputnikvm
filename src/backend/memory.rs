@@ -12,6 +12,8 @@ use primitive_types::{H160, H256, U256};
 pub struct MemoryVicinity {
 	/// Gas price.
 	pub gas_price: U256,
+	/// Effective gas price.
+	pub effective_gas_price: U256,
 	/// Origin.
 	pub origin: H160,
 	/// Chain ID.
@@ -91,7 +93,7 @@ impl<'vicinity> MemoryBackend<'vicinity> {
 
 impl<'vicinity> Backend for MemoryBackend<'vicinity> {
 	fn gas_price(&self) -> U256 {
-		self.vicinity.gas_price
+		self.vicinity.effective_gas_price
 	}
 	fn origin(&self) -> H160 {
 		self.vicinity.origin

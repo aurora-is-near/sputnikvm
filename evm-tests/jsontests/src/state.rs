@@ -1,3 +1,4 @@
+use crate::utils::transaction::InvalidTxReason;
 use ethjson::hash::Address;
 use ethjson::spec::builtin::{AltBn128ConstOperations, AltBn128Pairing, PricingAt};
 use ethjson::spec::{ForkSpec, Pricing};
@@ -7,7 +8,7 @@ use evm::executor::stack::{
 	MemoryStackState, PrecompileFailure, PrecompileFn, PrecompileOutput, StackExecutor,
 	StackSubstateMetadata,
 };
-use evm::utils::{calc_blob_gas_price, calc_data_fee, calc_excess_blob_gas};
+use evm::utils::{calc_blob_gas_price, calc_data_fee, calc_excess_blob_gas, calc_max_data_fee};
 use evm::{Config, Context, ExitError, ExitReason, ExitSucceed};
 use lazy_static::lazy_static;
 use libsecp256k1::SecretKey;
@@ -97,27 +98,23 @@ impl Test {
 			if max_fee_per_gas < block_base_fee_per_gas {
 				return None;
 			}
-
-			let max_priority_fee_per_gas = self.0.transaction.max_priority_fee_per_gas.0;
-
-			// priority fee must be lower than regaular fee
-			if max_fee_per_gas < max_priority_fee_per_gas {
-				return None;
-			}
-
-			let priority_fee_per_gas = std::cmp::min(
-				max_priority_fee_per_gas,
-				max_fee_per_gas - block_base_fee_per_gas,
-			);
-			priority_fee_per_gas + block_base_fee_per_gas
+			max_fee_per_gas
 		} else {
 			self.0.transaction.gas_price.0
 		};
+		let max_priority_fee_per_gas = self.0.transaction.max_priority_fee_per_gas.0;
+
+		// priority fee must be lower than regaular fee
+		if max_priority_fee_per_gas > gas_price {
+			return None;
+		}
 
 		// gas price cannot be lower than base fee
 		if gas_price < block_base_fee_per_gas {
 			return None;
 		}
+
+		let effective_gas_price = gas_price.min(max_priority_fee_per_gas + block_base_fee_per_gas);
 
 		let block_randomness = if spec.is_eth2() {
 			self.0.env.random.map(|r| {
@@ -145,6 +142,7 @@ impl Test {
 
 		Some(MemoryVicinity {
 			gas_price,
+			effective_gas_price,
 			origin: self.unwrap_caller(),
 			block_hashes: Vec::new(),
 			block_number: self.0.env.number.into(),
@@ -456,6 +454,29 @@ fn check_create_exit_reason(reason: &ExitReason, expect_exception: &Option<Strin
 	false
 }
 
+/// Check Exit Reason of EVM execution
+fn check_validate_exit_reason(
+	reason: &InvalidTxReason,
+	expect_exception: &Option<String>,
+	name: String,
+) -> bool {
+	// TODOFEE
+	if let Some(exception) = expect_exception.as_deref() {
+		if matches!(reason, InvalidTxReason::OutOfFund) {
+			let check_result = exception == "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+				|| exception == "TR_NoFunds"
+				|| exception == "TR_NoFundsX"
+				|| exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
+			assert!(
+				check_result,
+				"message: {exception}\nbut expected init code limit exceeded for test: {name}"
+			);
+			return true;
+		}
+	}
+	false
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn test_run(
 	verbose_output: &VerboseOutput,
@@ -486,6 +507,7 @@ fn test_run(
 			}
 		};
 
+		// EIP-4844
 		let blob_gas_price =
 			if let Some(current_excess_blob_gas) = test.0.env.current_excess_blob_gas {
 				Some(calc_blob_gas_price(current_excess_blob_gas.0.as_u64()))
@@ -501,9 +523,19 @@ fn test_run(
 			} else {
 				None
 			};
+		// EIP-4844
+		let data_max_fee = if gasometer_config.has_shard_blob_transactions {
+			let max_fee_per_blob_gas = test_tx.max_fee_per_blob_gas.unwrap_or_default().0;
+			Some(calc_max_data_fee(
+				max_fee_per_blob_gas,
+				test_tx.blob_versioned_hashes.len(),
+			))
+		} else {
+			None
+		};
 		let data_fee = if gasometer_config.has_shard_blob_transactions {
 			Some(calc_data_fee(
-				blob_gas_price.expect("should be blob_gas_price"),
+				blob_gas_price.expect("expect blob_gas_price"),
 				test_tx.blob_versioned_hashes.len(),
 			))
 		} else {
@@ -531,8 +563,14 @@ fn test_run(
 					spec: spec.clone(),
 					state: original_state,
 				});
+
+				if verbose_output.verbose_failed {
+					println!(" [{:?}]  {} ... validation failed\t<----", spec, name);
+				}
 				tests_result.failed += 1;
 			}
+			// Set test to passed as it pass hash-validation
+			tests_result.total += states.len() as u64;
 			continue;
 		}
 		let vicinity = vicinity.unwrap();
@@ -574,21 +612,33 @@ fn test_run(
 
 			tests_result.total += 1;
 
-			let x = crate::utils::transaction::validate(
-				transaction,
+			let gas_limit: u64 = transaction.gas_limit.into();
+			let data: Vec<u8> = transaction.data.clone().into();
+
+			let valid_tx = crate::utils::transaction::validate(
+				&transaction,
 				test.0.env.gas_limit.0,
 				caller_balance,
 				&gasometer_config,
 				test_tx,
 				blob_gas_price,
+				data_max_fee,
 			);
-			// TODOFEE
-			// println!("X: {x:#?}");
+			if let Err(err) = &valid_tx {
+				if check_validate_exit_reason(err, &state.expect_exception, format!("{name}")) {
+					continue;
+				}
+			}
+
+			// We do not check overflow after TX validation
+			let total_fee = if let Some(data_fee) = data_fee {
+				vicinity.effective_gas_price * gas_limit + data_fee
+			} else {
+				vicinity.effective_gas_price * gas_limit
+			};
 
 			// Only execute valid transactions
-			if let Ok(transaction) = x {
-				let gas_limit: u64 = transaction.gas_limit.into();
-				let data: Vec<u8> = transaction.data.into();
+			if valid_tx.is_ok() {
 				let metadata =
 					StackSubstateMetadata::new(transaction.gas_limit.into(), &gasometer_config);
 				let executor_state = MemoryStackState::new(metadata, &backend);
@@ -598,19 +648,7 @@ fn test_run(
 					&gasometer_config,
 					&precompile,
 				);
-
-				let total_fee = if let Some(data_fee) = data_fee {
-					vicinity.gas_price * gas_limit + data_fee
-				} else {
-					vicinity.gas_price * gas_limit
-				};
-
-				if let Err(res) = executor.state_mut().withdraw(caller, total_fee) {
-					if matches!(res, ExitError::OutOfFund) {
-						println!("OutOfFund");
-						continue;
-					}
-				}
+				executor.state_mut().withdraw(caller, total_fee).unwrap();
 
 				let access_list = transaction
 					.access_list
@@ -662,7 +700,7 @@ fn test_run(
 					);
 				}
 
-				let actual_fee = executor.fee(vicinity.gas_price);
+				let actual_fee = executor.fee(vicinity.effective_gas_price);
 				// Forks after London burn miner rewards and thus have different gas fee
 				// calculation (see EIP-1559)
 				let miner_reward = if spec.is_eth2() {
@@ -706,7 +744,9 @@ fn test_run(
 				tests_result.failed_tests.push(failed_res);
 				tests_result.failed += 1;
 
-				println!(" [{:?}]  {}:{} ... failed\t<----", spec, name, i);
+				if verbose_output.verbose_failed {
+					println!(" [{:?}]  {}:{} ... failed\t<----", spec, name, i);
+				}
 				if verbose_output.print_state {
 					// Print detailed state data
 					println!(
@@ -717,12 +757,6 @@ fn test_run(
 						// Decode balance
 						let mut write_buf = [0u8; 32];
 						acc.balance.to_big_endian(&mut write_buf[..]);
-						// Convert to balance to Hex format
-						// let balance = if acc.balance > U256::from(u128::MAX) {
-						// 	hex::encode(write_buf)
-						// } else {
-						// 	format!("{:x?}", acc.balance.as_u128())
-						// };
 						let balance = acc.balance.to_string();
 
 						println!(

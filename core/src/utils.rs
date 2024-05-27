@@ -78,11 +78,21 @@ pub fn calc_blob_gas_price(excess_blob_gas: u64) -> u128 {
 ///
 /// [EIP-4844]: https://eips.ethereum.org/EIPS/eip-4844
 #[inline]
+pub fn calc_max_data_fee(max_fee_per_blob_gas: U256, blob_hashes_len: usize) -> U256 {
+	max_fee_per_blob_gas.saturating_mul(U256::from(get_total_blob_gas(blob_hashes_len)))
+}
+
+/// Calculates the [EIP-4844] `data_fee` of the transaction.
+///
+/// Returns `None` if `Cancun` is not enabled. This is enforced in [`Env::validate_block_env`].
+///
+/// [EIP-4844]: https://eips.ethereum.org/EIPS/eip-4844
+#[inline]
 pub fn calc_data_fee(blob_gas_price: u128, blob_hashes_len: usize) -> U256 {
 	U256::from(blob_gas_price).saturating_mul(U256::from(get_total_blob_gas(blob_hashes_len)))
 }
 
-/// See [EIP-4844], [`calc_data_fee`]
+/// See [EIP-4844], [`calc_max_data_fee`]
 ///
 /// [EIP-4844]: https://eips.ethereum.org/EIPS/eip-4844
 #[inline]

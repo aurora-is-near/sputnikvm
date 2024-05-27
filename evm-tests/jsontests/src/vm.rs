@@ -31,6 +31,7 @@ impl Test {
 
 		MemoryVicinity {
 			gas_price: self.0.transaction.gas_price.into(),
+			effective_gas_price: self.0.transaction.gas_price.into(),
 			origin: self.0.transaction.origin.into(),
 			block_hashes: Vec::new(),
 			block_number: self.0.env.number.into(),

@@ -167,14 +167,15 @@ pub mod transaction {
 	use primitive_types::{H160, H256, U256};
 
 	pub fn validate(
-		tx: Transaction,
+		tx: &Transaction,
 		block_gas_limit: U256,
 		caller_balance: U256,
 		config: &evm::Config,
 		test_tx: &MultiTransaction,
 		blob_gas_price: Option<u128>,
-	) -> Result<Transaction, InvalidTxReason> {
-		match intrinsic_gas(&tx, config) {
+		data_fee: Option<U256>,
+	) -> Result<(), InvalidTxReason> {
+		match intrinsic_gas(tx, config) {
 			None => return Err(InvalidTxReason::IntrinsicGas),
 			Some(required_gas) => {
 				if tx.gas_limit < Uint(U256::from(required_gas)) {
@@ -187,16 +188,28 @@ pub mod transaction {
 			return Err(InvalidTxReason::GasLimitReached);
 		}
 
-		let required_funds = if let Some(x) = tx.gas_limit.0.checked_mul(tx.gas_price.0) {
-			if let Some(y) = x.checked_add(tx.value.0) {
-				y
-			} else {
-				return Err(InvalidTxReason::OutOfFund);
-			}
+		let required_funds = tx
+			.gas_limit
+			.0
+			.checked_mul(test_tx.gas_price.0)
+			.ok_or(InvalidTxReason::OutOfFund)?
+			.checked_add(tx.value.0)
+			.ok_or(InvalidTxReason::OutOfFund)?;
+		// TODOFEE
+		// println!(
+		// 	"check: {} * {} + {}",
+		// 	tx.gas_limit.0, test_tx.gas_price.0, tx.value.0
+		// );
+		let required_funds = if let Some(data_fee) = data_fee {
+			required_funds
+				.checked_add(data_fee)
+				.ok_or(InvalidTxReason::OutOfFund)?
 		} else {
-			return Err(InvalidTxReason::OutOfFund);
+			required_funds
 		};
 
+		// TODOFEE
+		// println!("check: {required_funds} > {caller_balance}\n");
 		if caller_balance < required_funds {
 			return Err(InvalidTxReason::OutOfFund);
 		}
@@ -229,7 +242,7 @@ pub mod transaction {
 				blob.to_big_endian(&mut blob_hash[..]);
 
 				// TODOFEE
-				println!("{:#?}-{VERSIONED_HASH_VERSION_KZG:?}", blob_hash[0]);
+				// println!("{:#?}-{VERSIONED_HASH_VERSION_KZG:?}", blob_hash[0]);
 				if blob_hash[0] != VERSIONED_HASH_VERSION_KZG {
 					return Err(InvalidTxReason::BlobVersionNotSupported);
 				}
@@ -242,7 +255,7 @@ pub mod transaction {
 			}
 		}
 
-		Ok(tx)
+		Ok(())
 	}
 
 	fn intrinsic_gas(tx: &Transaction, config: &evm::Config) -> Option<u64> {
