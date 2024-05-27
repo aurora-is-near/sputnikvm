@@ -205,10 +205,5 @@ fn should_skip(path: &Path) -> bool {
 			|| Path::new(dir_name) == Path::new(case)
 	};
 
-	for case in SKIPPED_CASES {
-		if matches(case) {
-			return true;
-		}
-	}
-	false
+	SKIPPED_CASES.iter().any(|case| matches(case))
 }

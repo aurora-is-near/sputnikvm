@@ -625,7 +625,7 @@ fn test_run(
 				data_max_fee,
 			);
 			if let Err(err) = &valid_tx {
-				if check_validate_exit_reason(err, &state.expect_exception, format!("{name}")) {
+				if check_validate_exit_reason(err, &state.expect_exception, name.to_string()) {
 					continue;
 				}
 			}

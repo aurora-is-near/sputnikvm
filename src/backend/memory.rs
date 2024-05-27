@@ -92,6 +92,7 @@ impl<'vicinity> MemoryBackend<'vicinity> {
 }
 
 impl<'vicinity> Backend for MemoryBackend<'vicinity> {
+	#[allow(clippy::misnamed_getters)]
 	fn gas_price(&self) -> U256 {
 		self.vicinity.effective_gas_price
 	}

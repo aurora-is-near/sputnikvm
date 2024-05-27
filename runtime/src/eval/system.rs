@@ -96,7 +96,7 @@ pub fn base_fee<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 /// EIP-7516: BLOBBASEFEE opcode
 pub fn blob_base_fee<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 	// TODOFEE
-	println!("blob_base_fee");
+	// println!("blob_base_fee");
 	let blob_base_fee = U256::from(handler.blob_base_fee().unwrap_or_default());
 	push_u256!(runtime, blob_base_fee);
 	Control::Continue
@@ -127,7 +127,7 @@ pub fn blob_hash<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 	// - https://eips.ethereum.org/EIPS/eip-4844#opcode-to-get-versioned-hashes
 	let blob_hash = handler.get_blob_hash(index).unwrap_or(U256::zero());
 	// TODOFEE
-	println!("\tset blob_hash: {blob_hash}");
+	// println!("\tset blob_hash: {blob_hash}");
 	// Set top stack index with `blob_hash` value
 	if let Err(e) = runtime.machine.stack_mut().set(0, blob_hash) {
 		return Control::Exit(e.into());

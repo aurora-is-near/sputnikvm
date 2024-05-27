@@ -10,6 +10,7 @@ fn run_loop_contract() {
 
 	let vicinity = MemoryVicinity {
 		gas_price: U256::zero(),
+		effective_gas_price: U256::zero(),
 		origin: H160::default(),
 		block_hashes: Vec::new(),
 		block_number: Default::default(),
