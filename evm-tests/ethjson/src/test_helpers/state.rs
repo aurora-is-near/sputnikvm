@@ -59,14 +59,11 @@ pub struct MultiTransaction {
 	/// Gas limit set.
 	pub gas_limit: Vec<Uint>,
 	/// Gas price.
-	#[serde(default)]
-	pub gas_price: Uint,
+	pub gas_price: Option<Uint>,
 	/// for details on `maxFeePerGas` see EIP-1559
-	#[serde(default)]
-	pub max_fee_per_gas: Uint,
+	pub max_fee_per_gas: Option<Uint>,
 	/// for details on `maxPriorityFeePerGas` see EIP-1559
-	#[serde(default)]
-	pub max_priority_fee_per_gas: Uint,
+	pub max_priority_fee_per_gas: Option<Uint>,
 	/// Nonce.
 	pub nonce: Uint,
 	/// Secret key.
@@ -85,24 +82,6 @@ pub struct MultiTransaction {
 }
 
 impl MultiTransaction {
-	/// max_priority_fee_per_gas (see EIP-1559)
-	pub const fn max_priority_fee_per_gas(&self) -> U256 {
-		if self.max_priority_fee_per_gas.0.is_zero() {
-			self.gas_price.0
-		} else {
-			self.max_priority_fee_per_gas.0
-		}
-	}
-
-	/// max_fee_per_gas (see EIP-1559)
-	pub const fn max_fee_per_gas(&self) -> U256 {
-		if self.max_fee_per_gas.0.is_zero() {
-			self.gas_price.0
-		} else {
-			self.max_fee_per_gas.0
-		}
-	}
-
 	/// Build transaction with given indexes.
 	pub fn select(&self, indexes: &PostStateIndexes) -> Transaction {
 		let data_index = indexes.data as usize;

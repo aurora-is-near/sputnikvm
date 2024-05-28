@@ -86,35 +86,26 @@ impl Test {
 		blob_gas_price: Option<u128>,
 	) -> Option<MemoryVicinity> {
 		let block_base_fee_per_gas = self.0.env.block_base_fee_per_gas.0;
-		let gas_price = if self.0.transaction.gas_price.0.is_zero() {
-			let max_fee_per_gas = self.0.transaction.max_fee_per_gas.0;
+		let tx = &self.0.transaction;
+		let gas_price = tx.gas_price.or(tx.max_fee_per_gas).unwrap_or_default().0;
 
-			// max_fee_per_gas is only defined for London and later
-			if !max_fee_per_gas.is_zero() && spec < &ForkSpec::London {
+		// EIP-1559: priority fee must be lower than gas_price
+		if let Some(max_priority_fee_per_gas) = tx.max_priority_fee_per_gas {
+			if max_priority_fee_per_gas.0 > gas_price {
 				return None;
 			}
-
-			// Cannot specify a lower fee than the base fee
-			if max_fee_per_gas < block_base_fee_per_gas {
-				return None;
-			}
-			max_fee_per_gas
-		} else {
-			self.0.transaction.gas_price.0
-		};
-		let max_priority_fee_per_gas = self.0.transaction.max_priority_fee_per_gas.0;
-
-		// priority fee must be lower than regaular fee
-		if max_priority_fee_per_gas > gas_price {
-			return None;
 		}
+		let effective_gas_price = self.0.transaction.max_priority_fee_per_gas.map_or(
+			gas_price,
+			|max_priority_fee_per_gas| {
+				gas_price.min(max_priority_fee_per_gas.0 + block_base_fee_per_gas)
+			},
+		);
 
 		// gas price cannot be lower than base fee
 		if gas_price < block_base_fee_per_gas {
 			return None;
 		}
-
-		let effective_gas_price = gas_price.min(max_priority_fee_per_gas + block_base_fee_per_gas);
 
 		let block_randomness = if spec.is_eth2() {
 			self.0.env.random.map(|r| {
@@ -132,13 +123,7 @@ impl Test {
 		};
 
 		#[allow(clippy::map_clone)]
-		let blob_hashes = self
-			.0
-			.transaction
-			.blob_versioned_hashes
-			.iter()
-			.map(|v| *v)
-			.collect();
+		let blob_hashes = tx.blob_versioned_hashes.iter().map(|v| *v).collect();
 
 		Some(MemoryVicinity {
 			gas_price,
@@ -487,6 +472,10 @@ fn test_run(
 	let mut tests_result = TestExecutionResult::new();
 	let test_tx = &test.0.transaction;
 	for (spec, states) in &test.0.post_states {
+		// TODOFEE
+		// if name != "outOfFundsOldTypes" {
+		// 	continue;
+		// }
 		// Run tests for specific SPEC (Hard fork)
 		if let Some(s) = specific_spec.as_ref() {
 			if s != spec {
@@ -571,6 +560,7 @@ fn test_run(
 			}
 			// Set test to passed as it pass hash-validation
 			tests_result.total += states.len() as u64;
+			println!("-----------> SKIPPED {name}");
 			continue;
 		}
 		let vicinity = vicinity.unwrap();
@@ -585,7 +575,7 @@ fn test_run(
 
 		for (i, state) in states.iter().enumerate() {
 			// TODOFEE
-			// if i != 1 {
+			// if i != 5 {
 			// 	continue;
 			// }
 
@@ -621,6 +611,7 @@ fn test_run(
 				caller_balance,
 				&gasometer_config,
 				test_tx,
+				&vicinity,
 				blob_gas_price,
 				data_max_fee,
 			);
@@ -704,12 +695,10 @@ fn test_run(
 				// Forks after London burn miner rewards and thus have different gas fee
 				// calculation (see EIP-1559)
 				let miner_reward = if spec.is_eth2() {
-					let max_priority_fee_per_gas = test.0.transaction.max_priority_fee_per_gas();
-					let max_fee_per_gas = test.0.transaction.max_fee_per_gas();
-					let base_fee_per_gas = vicinity.block_base_fee_per_gas;
-					let priority_fee_per_gas =
-						std::cmp::min(max_priority_fee_per_gas, max_fee_per_gas - base_fee_per_gas);
-					executor.fee(priority_fee_per_gas)
+					let coinbase_gas_price = vicinity
+						.effective_gas_price
+						.saturating_sub(vicinity.block_base_fee_per_gas);
+					executor.fee(coinbase_gas_price)
 				} else {
 					actual_fee
 				};

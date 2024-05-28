@@ -162,16 +162,20 @@ pub mod transaction {
 	use ethjson::test_helpers::state::MultiTransaction;
 	use ethjson::transaction::Transaction;
 	use ethjson::uint::Uint;
+	use evm::backend::MemoryVicinity;
 	use evm::gasometer::{self, Gasometer};
 	use evm::utils::{MAX_BLOB_NUMBER_PER_BLOCK, VERSIONED_HASH_VERSION_KZG};
 	use primitive_types::{H160, H256, U256};
 
+	// TODO: it will be refactored as old solution inefficient, also will be removed clippy-allow flag
+	#[allow(clippy::too_many_arguments)]
 	pub fn validate(
 		tx: &Transaction,
 		block_gas_limit: U256,
 		caller_balance: U256,
 		config: &evm::Config,
 		test_tx: &MultiTransaction,
+		vicinity: &MemoryVicinity,
 		blob_gas_price: Option<u128>,
 		data_fee: Option<U256>,
 	) -> Result<(), InvalidTxReason> {
@@ -191,15 +195,11 @@ pub mod transaction {
 		let required_funds = tx
 			.gas_limit
 			.0
-			.checked_mul(test_tx.gas_price.0)
+			.checked_mul(vicinity.gas_price)
 			.ok_or(InvalidTxReason::OutOfFund)?
 			.checked_add(tx.value.0)
 			.ok_or(InvalidTxReason::OutOfFund)?;
-		// TODOFEE
-		// println!(
-		// 	"check: {} * {} + {}",
-		// 	tx.gas_limit.0, test_tx.gas_price.0, tx.value.0
-		// );
+
 		let required_funds = if let Some(data_fee) = data_fee {
 			required_funds
 				.checked_add(data_fee)
@@ -209,7 +209,12 @@ pub mod transaction {
 		};
 
 		// TODOFEE
-		// println!("check: {required_funds} > {caller_balance}\n");
+		// println!(
+		// 	"# Tx.Validate: {} * {} + {} [gas_limit * gas_price + value]",
+		// 	tx.gas_limit.0, vicinity.gas_price, tx.value.0
+		// );
+		// println!("effective_gas_price: {}", vicinity.effective_gas_price);
+		// println!("required_funds: {required_funds} > {caller_balance}\n");
 		if caller_balance < required_funds {
 			return Err(InvalidTxReason::OutOfFund);
 		}
