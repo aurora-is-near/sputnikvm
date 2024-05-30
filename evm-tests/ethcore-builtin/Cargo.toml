@@ -25,5 +25,4 @@ derive_more = "0.99"
 hex = "0.4.3"
 
 [dev-dependencies]
-hex-literal = "0.4"
 maplit = "1.0.2"

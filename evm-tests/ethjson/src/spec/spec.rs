@@ -90,7 +90,7 @@ impl ForkSpec {
 }
 
 impl TryFrom<String> for ForkSpec {
-	type Error = ();
+	type Error = String;
 	fn try_from(value: String) -> Result<Self, Self::Error> {
 		let res = match value.to_lowercase().as_str() {
 			"eip158tobyzantiumat5" => Self::EIP158ToByzantiumAt5,
@@ -113,7 +113,7 @@ impl TryFrom<String> for ForkSpec {
 			"paris" => Self::Paris,
 			"shanghai" => Self::Shanghai,
 			"cancun" => Self::Cancun,
-			_ => return Err(()),
+			other => return Err(format!("Unknown hard fork spec {other}")),
 		};
 		Ok(res)
 	}

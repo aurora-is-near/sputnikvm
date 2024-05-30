@@ -254,7 +254,7 @@ impl<'config> Gasometer<'config> {
 		inner_mut.memory_gas = memory_gas;
 		inner_mut.refunded_gas += gas_refund;
 
-		// "Record dynamic cost {gas_cost} - memory_gas {} - gas_refund {}",
+		// NOTE Extended meesage: "Record dynamic cost {gas_cost} - memory_gas {} - gas_refund {}",
 		log_gas!(self, "record_dynamic_cost: {}", gas_cost,);
 
 		Ok(())

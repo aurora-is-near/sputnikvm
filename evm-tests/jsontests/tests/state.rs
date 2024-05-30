@@ -17,7 +17,6 @@ fn short_test_file_name(name: &str) -> String {
 
 pub fn run(dir: &str) {
 	const SPEC: Option<ForkSpec> = Some(ForkSpec::Cancun);
-
 	let _ = env_logger::try_init();
 
 	let mut dest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -73,15 +72,6 @@ const SKIPPED_CASES: &[&str] = &[
 	// running the test.
 	"stTransactionTest/ValueOverflow",
 	"stTransactionTest/ValueOverflowParis",
-	// The below test cases are failing in geth too and as such are
-	// skipped here until they are fixed there (otherwise we don't know
-	// what the expected value should be for each test output).
-	"stTransactionTest/HighGasPrice",
-	"stTransactionTest/HighGasPriceParis",
-	"stCreateTest/CreateTransactionHighNonce",
-	// KZG-precompile not supported
-	"stPreCompiledContracts/precompsEIP2929Cancun",
-	"stPreCompiledContracts/idPrecomps",
 ];
 
 fn should_skip(path: &Path) -> bool {
