@@ -32,8 +32,8 @@ macro_rules! log_gas {
 	($self:expr, $($arg:tt)*) => (
 	log::trace!(target: "evm", "Gasometer {} [Gas used: {}, Gas left: {}]", format_args!($($arg)*),
 	$self.total_used_gas(), $self.gas());
-	// TODOFEE
-	// println!("\t# {} [{} | {}]", format_args!($($arg)*), $self.total_used_gas(), $self.gas());
+	#[cfg(feature = "print-debug")]
+	println!("\t# {} [{} | {}]", format_args!($($arg)*), $self.total_used_gas(), $self.gas());
 	);
 }
 

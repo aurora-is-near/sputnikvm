@@ -651,7 +651,6 @@ fn test_run(
 								gas_limit,
 								access_list,
 							);
-							// TODOFEE - check reason
 						}
 						ethjson::maybe::MaybeEmpty::None => {
 							let code = data;
