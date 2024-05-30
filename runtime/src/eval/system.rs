@@ -95,8 +95,6 @@ pub fn base_fee<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 /// CANCUN hard fork
 /// EIP-7516: BLOBBASEFEE opcode
 pub fn blob_base_fee<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	// TODOFEE
-	// println!("blob_base_fee");
 	let blob_base_fee = U256::from(handler.blob_base_fee().unwrap_or_default());
 	push_u256!(runtime, blob_base_fee);
 	Control::Continue
@@ -107,8 +105,6 @@ pub fn blob_base_fee<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<
 /// Logic related to operating with BLOBHASH opcode described:
 /// - https://eips.ethereum.org/EIPS/eip-4844#opcode-to-get-versioned-hashes
 pub fn blob_hash<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	// TODOFEE
-	// println!("blob_hash");
 	// Peek index from the top of the stack
 	let raw_index = match runtime.machine.stack().peek(0) {
 		Ok(value) => value,
@@ -120,20 +116,14 @@ pub fn blob_hash<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 	} else {
 		raw_index.as_usize()
 	};
-	// TODOFEE
-	// println!("\tindex: {index}");
 	// Get blob_hash from `tx.blob_versioned_hashes[index]`
 	// as described:
 	// - https://eips.ethereum.org/EIPS/eip-4844#opcode-to-get-versioned-hashes
 	let blob_hash = handler.get_blob_hash(index).unwrap_or(U256::zero());
-	// TODOFEE
-	// println!("\tset blob_hash: {blob_hash}");
 	// Set top stack index with `blob_hash` value
 	if let Err(e) = runtime.machine.stack_mut().set(0, blob_hash) {
 		return Control::Exit(e.into());
 	}
-	// TODOFEE
-	// println!("\tDONE");
 	Control::Continue
 }
 

@@ -84,7 +84,7 @@ impl Test {
 		&self,
 		spec: &ForkSpec,
 		blob_gas_price: Option<u128>,
-	) -> Option<MemoryVicinity> {
+	) -> Result<MemoryVicinity, InvalidTxReason> {
 		let block_base_fee_per_gas = self.0.env.block_base_fee_per_gas.0;
 		let tx = &self.0.transaction;
 		let gas_price = tx.gas_price.or(tx.max_fee_per_gas).unwrap_or_default().0;
@@ -92,7 +92,7 @@ impl Test {
 		// EIP-1559: priority fee must be lower than gas_price
 		if let Some(max_priority_fee_per_gas) = tx.max_priority_fee_per_gas {
 			if max_priority_fee_per_gas.0 > gas_price {
-				return None;
+				return Err(InvalidTxReason::PriorityFeeTooLarge);
 			}
 		}
 		let effective_gas_price = self.0.transaction.max_priority_fee_per_gas.map_or(
@@ -104,7 +104,7 @@ impl Test {
 
 		// gas price cannot be lower than base fee
 		if gas_price < block_base_fee_per_gas {
-			return None;
+			return Err(InvalidTxReason::GasPriceLessThenBlockBaseFee);
 		}
 
 		let block_randomness = if spec.is_eth2() {
@@ -119,13 +119,13 @@ impl Test {
 				crate::utils::u256_to_h256(r.0)
 			})
 		} else {
-			None
+			return Err(InvalidTxReason::WrongHardFork(spec.clone()));
 		};
 
 		#[allow(clippy::map_clone)]
 		let blob_hashes = tx.blob_versioned_hashes.iter().map(|v| *v).collect();
 
-		Some(MemoryVicinity {
+		Ok(MemoryVicinity {
 			gas_price,
 			effective_gas_price,
 			origin: self.unwrap_caller(),
@@ -386,7 +386,10 @@ fn cancun_builtins() -> BTreeMap<H160, ethcore_builtin::Builtin> {
 			Address(H160::from_low_u64_be(0xA)),
 			BuiltinCompat {
 				name: "kzg".to_string(),
-				pricing: PricingCompat::Empty,
+				pricing: PricingCompat::Single(Pricing::Linear(Linear {
+					base: 50_000,
+					word: 0,
+				})),
 				activate_at: None,
 			},
 		),
@@ -445,7 +448,6 @@ fn check_validate_exit_reason(
 	expect_exception: &Option<String>,
 	name: String,
 ) -> bool {
-	// TODOFEE
 	if let Some(exception) = expect_exception.as_deref() {
 		if matches!(reason, InvalidTxReason::OutOfFund) {
 			let check_result = exception == "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
@@ -472,10 +474,6 @@ fn test_run(
 	let mut tests_result = TestExecutionResult::new();
 	let test_tx = &test.0.transaction;
 	for (spec, states) in &test.0.post_states {
-		// TODOFEE
-		// if name != "outOfFundsOldTypes" {
-		// 	continue;
-		// }
 		// Run tests for specific SPEC (Hard fork)
 		if let Some(s) = specific_spec.as_ref() {
 			if s != spec {
@@ -530,15 +528,10 @@ fn test_run(
 		} else {
 			None
 		};
-		// TODOFEE
-		// println!(
-		// 	"# data_fee: {data_fee:?} [blob_versioned_hashes: {}]",
-		// 	test_tx.blob_versioned_hashes.len()
-		// );
 
 		let original_state = test.unwrap_to_pre_state();
 		let vicinity = test.unwrap_to_vicinity(spec, blob_gas_price);
-		if vicinity.is_none() {
+		if let Err(tx_err) = vicinity {
 			let h = states.first().unwrap().hash.0;
 			// if vicinity could not be computed then the transaction was invalid so we simply
 			// check the original state and move on
@@ -554,13 +547,15 @@ fn test_run(
 				});
 
 				if verbose_output.verbose_failed {
-					println!(" [{:?}]  {} ... validation failed\t<----", spec, name);
+					println!(" [{spec:?}]  {name}: {tx_err:?} ... validation failed\t<----");
 				}
 				tests_result.failed += 1;
 			}
 			// Set test to passed as it pass hash-validation
 			tests_result.total += states.len() as u64;
-			println!("-----------> SKIPPED {name}");
+			if verbose_output.verbose_failed {
+				println!("---> SKIPPED [{tx_err:?}]: {name}");
+			}
 			continue;
 		}
 		let vicinity = vicinity.unwrap();
@@ -574,11 +569,6 @@ fn test_run(
 			.map_or_else(Vec::new, |acc| acc.code.clone());
 
 		for (i, state) in states.iter().enumerate() {
-			// TODOFEE
-			// if i != 5 {
-			// 	continue;
-			// }
-
 			let transaction = test_tx.select(&state.indexes);
 			let mut backend = MemoryBackend::new(&vicinity, original_state.clone());
 
@@ -661,8 +651,7 @@ fn test_run(
 								gas_limit,
 								access_list,
 							);
-							// TODOFEE
-							// println!("REASON: {_reason:#?}");
+							// TODOFEE - check reason
 						}
 						ethjson::maybe::MaybeEmpty::None => {
 							let code = data;
@@ -678,8 +667,6 @@ fn test_run(
 							if check_create_exit_reason(&reason.0, &state.expect_exception) {
 								continue;
 							}
-							// TODOFEE
-							// println!("REASON: {reason:#?}");
 						}
 					}
 				}

@@ -33,7 +33,7 @@ macro_rules! log_gas {
 	log::trace!(target: "evm", "Gasometer {} [Gas used: {}, Gas left: {}]", format_args!($($arg)*),
 	$self.total_used_gas(), $self.gas());
 	// TODOFEE
-	// println!("   Gasometer {} [Gas used: {}, Gas left: {}]", format_args!($($arg)*), $self.total_used_gas(), $self.gas());
+	// println!("\t# {} [{} | {}]", format_args!($($arg)*), $self.total_used_gas(), $self.gas());
 	);
 }
 
@@ -184,7 +184,7 @@ impl<'config> Gasometer<'config> {
 		}
 
 		self.inner_mut()?.used_gas += cost;
-		log_gas!(self, "Record cost {}", cost);
+		log_gas!(self, "record_cost: {}", cost);
 		Ok(())
 	}
 
@@ -195,7 +195,7 @@ impl<'config> Gasometer<'config> {
 			refund,
 			snapshot: self.snapshot(),
 		});
-		log_gas!(self, "Record refund -{}", refund);
+		log_gas!(self, "record_refund: -{}", refund);
 
 		self.inner_mut()?.refunded_gas += refund;
 		Ok(())
@@ -254,13 +254,8 @@ impl<'config> Gasometer<'config> {
 		inner_mut.memory_gas = memory_gas;
 		inner_mut.refunded_gas += gas_refund;
 
-		log_gas!(
-			self,
-			"Record dynamic cost {} - memory_gas {} - gas_refund {}",
-			gas_cost,
-			memory_gas,
-			gas_refund
-		);
+		// "Record dynamic cost {gas_cost} - memory_gas {} - gas_refund {}",
+		log_gas!(self, "record_dynamic_cost: {}", gas_cost,);
 
 		Ok(())
 	}
@@ -274,7 +269,7 @@ impl<'config> Gasometer<'config> {
 		});
 
 		self.inner_mut()?.used_gas -= stipend;
-		log_gas!(self, "Record stipent {}", stipend);
+		log_gas!(self, "record_stipent: {}", stipend);
 		Ok(())
 	}
 

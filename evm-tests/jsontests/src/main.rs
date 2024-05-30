@@ -188,15 +188,10 @@ const SKIPPED_CASES: &[&str] = &[
 	// custom json parser. https://github.com/ethereum/tests/issues/971
 	"stTransactionTest/ValueOverflow",
 	"stTransactionTest/ValueOverflowParis",
-	// These tests are passing, but they take a lot of time to execute so we are going to skip them.
+	// These tests are passing, but they take a lot of time to execute so can going to skip them.
 	"stTimeConsuming/static_Call50000_sha256",
 	"vmPerformance/loopMul",
 	"stTimeConsuming/CALLBlake2f_MaxRounds",
-	// Skip python-specific tests
-	"Pyspecs/cancun/eip4844_blobs/point_evaluation_precompile_gas_usage",
-	"Pyspecs/cancun/eip4844_blobs/point_evaluation_precompile_calls",
-	"Pyspecs/cancun/eip4844_blobs/point_evaluation_precompile_gas_tx_to",
-	"Pyspecs/cancun/eip4844_blobs/valid_precompile_calls",
 ];
 
 /// Check is path should be skip.

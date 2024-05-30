@@ -1169,7 +1169,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		}
 
 		// TODOFEE
-		// println!("OPCODE: {opcode:?}");
+		// println!("### {opcode}");
 		if let Some(cost) = gasometer::static_opcode_cost(opcode) {
 			self.state
 				.metadata_mut()

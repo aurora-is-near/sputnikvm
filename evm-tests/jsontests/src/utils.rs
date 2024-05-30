@@ -159,6 +159,7 @@ pub fn flush() {
 pub mod transaction {
 	use ethjson::hash::Address;
 	use ethjson::maybe::MaybeEmpty;
+	use ethjson::spec::ForkSpec;
 	use ethjson::test_helpers::state::MultiTransaction;
 	use ethjson::transaction::Transaction;
 	use ethjson::uint::Uint;
@@ -207,14 +208,6 @@ pub mod transaction {
 		} else {
 			required_funds
 		};
-
-		// TODOFEE
-		// println!(
-		// 	"# Tx.Validate: {} * {} + {} [gas_limit * gas_price + value]",
-		// 	tx.gas_limit.0, vicinity.gas_price, tx.value.0
-		// );
-		// println!("effective_gas_price: {}", vicinity.effective_gas_price);
-		// println!("required_funds: {required_funds} > {caller_balance}\n");
 		if caller_balance < required_funds {
 			return Err(InvalidTxReason::OutOfFund);
 		}
@@ -223,7 +216,7 @@ pub mod transaction {
 		// Presence of max_fee_per_blob_gas means that this is blob transaction.
 		if let Some(max) = test_tx.max_fee_per_blob_gas {
 			// ensure that the user was willing to at least pay the current blob gasprice
-			if U256::from(blob_gas_price.expect("expect blob_gas_price")) > max.0 {
+			if U256::from(blob_gas_price.unwrap_or_default()) > max.0 {
 				return Err(InvalidTxReason::BlobGasPriceGreaterThanMax);
 			}
 
@@ -245,9 +238,6 @@ pub mod transaction {
 			for blob in test_tx.blob_versioned_hashes.iter() {
 				let mut blob_hash = H256([0; 32]);
 				blob.to_big_endian(&mut blob_hash[..]);
-
-				// TODOFEE
-				// println!("{:#?}-{VERSIONED_HASH_VERSION_KZG:?}", blob_hash[0]);
 				if blob_hash[0] != VERSIONED_HASH_VERSION_KZG {
 					return Err(InvalidTxReason::BlobVersionNotSupported);
 				}
@@ -292,10 +282,13 @@ pub mod transaction {
 		IntrinsicGas,
 		OutOfFund,
 		GasLimitReached,
+		PriorityFeeTooLarge,
+		GasPriceLessThenBlockBaseFee,
 		BlobCreateTransaction,
 		BlobVersionNotSupported,
 		TooManyBlobs,
 		EmptyBlobs,
 		BlobGasPriceGreaterThanMax,
+		WrongHardFork(ForkSpec),
 	}
 }
