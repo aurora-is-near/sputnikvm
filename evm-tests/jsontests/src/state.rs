@@ -427,16 +427,47 @@ pub fn test(
 }
 
 /// Check Exit Reason of EVM execution
-fn check_create_exit_reason(reason: &ExitReason, expect_exception: &Option<String>) -> bool {
-	if let Some(exception) = expect_exception.as_deref() {
-		if matches!(reason, ExitReason::Error(ExitError::CreateContractLimit)) {
-			let check_result = exception == "TR_InitCodeLimitExceeded"
-				|| exception == "TransactionException.INITCODE_SIZE_EXCEEDED";
+fn check_create_exit_reason(
+	reason: &ExitReason,
+	expect_exception: &Option<String>,
+	name: &str,
+) -> bool {
+	match reason {
+		ExitReason::Error(err) => {
+			if let Some(exception) = expect_exception.as_deref() {
+				match err {
+					ExitError::CreateContractLimit => {
+						let check_result = exception == "TR_InitCodeLimitExceeded"
+							|| exception == "TransactionException.INITCODE_SIZE_EXCEEDED";
+						assert!(
+							check_result,
+							"unexpected exception {exception:?} for CreateContractLimit error for test: {name}"
+						);
+						return true;
+					}
+					ExitError::MaxNonce => {
+						let check_result = exception == "TR_NonceHasMaxValue";
+						assert!(check_result,
+								"unexpected exception {exception:?} for MaxNonce error for test: {name}"
+						);
+						return true;
+					}
+					_ => {
+						panic!("unexpected error: {err:?} for exception: {exception}")
+					}
+				}
+			} else {
+				return false;
+			}
+		}
+		ExitReason::Fatal(err) => {
+			panic!("Unexpected error: {err:?}")
+		}
+		_ => {
 			assert!(
-				check_result,
-				"message: {exception}\nbut expected init code limit exceeded"
+				expect_exception.is_none(),
+				"Unexpected json-test error: {expect_exception:?}"
 			);
-			return true;
 		}
 	}
 	false
@@ -446,23 +477,108 @@ fn check_create_exit_reason(reason: &ExitReason, expect_exception: &Option<Strin
 fn check_validate_exit_reason(
 	reason: &InvalidTxReason,
 	expect_exception: &Option<String>,
-	name: String,
+	name: &str,
 ) -> bool {
-	if let Some(exception) = expect_exception.as_deref() {
-		if matches!(reason, InvalidTxReason::OutOfFund) {
-			let check_result = exception == "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
-				|| exception == "TR_TypeNotSupported"
-				|| exception == "TR_NoFunds"
-				|| exception == "TR_NoFundsX"
-				|| exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
-			assert!(
-				check_result,
-				"message: {exception}\nbut expected init code limit exceeded for test: {name}"
-			);
-			return true;
-		}
-	}
-	false
+	expect_exception.as_deref().map_or_else(
+		|| {
+			panic!("unexpected validation error reason: {reason:?}");
+		},
+		|exception| {
+			match reason {
+				InvalidTxReason::OutOfFund => {
+					let check_result = exception
+						== "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+						|| exception == "TR_TypeNotSupported"
+						|| exception == "TR_NoFunds"
+						|| exception == "TR_NoFundsX"
+						|| exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for OutOfFund  for test: {name}"
+					);
+				}
+				InvalidTxReason::GasLimitReached => {
+					let check_result = exception == "TR_GasLimitReached";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for GasLimitReached  for test: {name}"
+					);
+				}
+				InvalidTxReason::IntrinsicGas => {
+					let check_result = exception == "TR_NoFundsOrGas"
+						|| exception == "TR_IntrinsicGas"
+						|| exception == "TransactionException.INTRINSIC_GAS_TOO_LOW"
+						|| exception == "IntrinsicGas"
+						|| exception == "TR_TypeNotSupported";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for IntrinsicGas  for test: {name}"
+					);
+				}
+				InvalidTxReason::BlobVersionNotSupported => {
+					let check_result = exception
+						== "TransactionException.TYPE_3_TX_INVALID_BLOB_VERSIONED_HASH"
+						|| exception == "TR_BLOBVERSION_INVALID";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for BlobVersionNotSupported  for test: {name}"
+					);
+				}
+				InvalidTxReason::BlobCreateTransaction => {
+					let check_result = exception == "TR_BLOBCREATE";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for BlobCreateTransaction  for test: {name}"
+					);
+				}
+				InvalidTxReason::BlobGasPriceGreaterThanMax => {
+					let check_result =
+						exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for BlobGasPriceGreaterThanMax  for test: {name}"
+					);
+				}
+				InvalidTxReason::TooManyBlobs => {
+					let check_result = exception == "TR_BLOBLIST_OVERSIZE"
+						|| exception == "TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for TooManyBlobs  for test: {name}"
+					);
+				}
+				InvalidTxReason::EmptyBlobs => {
+					let check_result = exception == "TransactionException.TYPE_3_TX_ZERO_BLOBS"
+						|| exception == "TR_EMPTYBLOB";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for EmptyBlobs  for test: {name}"
+					);
+				}
+				InvalidTxReason::MaxFeePerBlobGasNotSupported => {
+					let check_result =
+						exception == "TransactionException.TYPE_3_TX_PRE_FORK|TransactionException.TYPE_3_TX_ZERO_BLOBS";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for MaxFeePerBlobGasNotSupported  for test: {name}"
+					);
+				}
+				InvalidTxReason::BlobVersionedHashesNotSupported => {
+					let check_result = exception == "TransactionException.TYPE_3_TX_PRE_FORK";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for BlobVersionedHashesNotSupported  for test: {name}"
+					);
+				}
+				_ => {
+					panic!(
+						"unexpected exception {exception:?} for reason {reason:?} for test {name}"
+					);
+				}
+			}
+			true
+		},
+	)
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -475,6 +591,9 @@ fn test_run(
 	let mut tests_result = TestExecutionResult::new();
 	let test_tx = &test.0.transaction;
 	for (spec, states) in &test.0.post_states {
+		// if name != "create2collisionSelfdestructedOOG" {
+		// 	continue;
+		// }
 		// Run tests for specific SPEC (Hard fork)
 		if let Some(s) = specific_spec.as_ref() {
 			if s != spec {
@@ -604,9 +723,10 @@ fn test_run(
 				&vicinity,
 				blob_gas_price,
 				data_max_fee,
+				spec,
 			);
 			if let Err(err) = &valid_tx {
-				if check_validate_exit_reason(err, &state.expect_exception, name.to_string()) {
+				if check_validate_exit_reason(err, &state.expect_exception, name) {
 					continue;
 				}
 			}
@@ -651,6 +771,10 @@ fn test_run(
 								gas_limit,
 								access_list,
 							);
+							// TODOFEE
+							if let Some(e) = state.expect_exception.as_ref() {
+								panic!("==>[{spec:?}]  CALL expect_exception: {e} {_reason:?}");
+							}
 						}
 						ethjson::maybe::MaybeEmpty::None => {
 							let code = data;
@@ -663,11 +787,20 @@ fn test_run(
 								gas_limit,
 								access_list,
 							);
-							if check_create_exit_reason(&reason.0, &state.expect_exception) {
+							if check_create_exit_reason(
+								&reason.0,
+								&state.expect_exception,
+								&format!("{spec:?}-{name}-{i}"),
+							) {
 								continue;
 							}
 						}
 					}
+				} else {
+					// TODOFEE
+					// if let Some(e) = state.expect_exception.as_ref() {
+					// 	println!("==> CALLER_CADE expect_exception: {e} {name}-{i}");
+					// }
 				}
 
 				if verbose_output.print_state {
@@ -704,6 +837,13 @@ fn test_run(
 				let (values, logs) = executor.into_state().deconstruct();
 
 				backend.apply(values, logs, delete_empty);
+			} else {
+				// TODOFEE
+				if let Some(_e) = state.expect_exception.as_ref() {
+					// println!("==> expect_exception: {e}");
+				} else {
+					panic!("{name}-{i}")
+				}
 			}
 			let (is_valid_hash, actual_hash) =
 				crate::utils::assert_valid_hash(&state.hash.0, backend.state());

@@ -159,6 +159,7 @@ pub fn flush() {
 pub mod transaction {
 	use ethjson::hash::Address;
 	use ethjson::maybe::MaybeEmpty;
+	use ethjson::spec::ForkSpec;
 	use ethjson::test_helpers::state::MultiTransaction;
 	use ethjson::transaction::Transaction;
 	use ethjson::uint::Uint;
@@ -178,6 +179,7 @@ pub mod transaction {
 		vicinity: &MemoryVicinity,
 		blob_gas_price: Option<u128>,
 		data_fee: Option<U256>,
+		spec: &ForkSpec,
 	) -> Result<(), InvalidTxReason> {
 		match intrinsic_gas(tx, config) {
 			None => return Err(InvalidTxReason::IntrinsicGas),
@@ -213,39 +215,48 @@ pub mod transaction {
 
 		// CANCUN tx validation
 		// Presence of max_fee_per_blob_gas means that this is blob transaction.
-		if let Some(max) = test_tx.max_fee_per_blob_gas {
-			// ensure that the user was willing to at least pay the current blob gasprice
-			if U256::from(blob_gas_price.unwrap_or_default()) > max.0 {
-				return Err(InvalidTxReason::BlobGasPriceGreaterThanMax);
-			}
+		if *spec >= ForkSpec::Cancun {
+			if let Some(max) = test_tx.max_fee_per_blob_gas {
+				// ensure that the user was willing to at least pay the current blob gasprice
+				if U256::from(blob_gas_price.expect("expect blob_gas_price")) > max.0 {
+					return Err(InvalidTxReason::BlobGasPriceGreaterThanMax);
+				}
 
-			// there must be at least one blob
-			if test_tx.blob_versioned_hashes.is_empty() {
-				return Err(InvalidTxReason::EmptyBlobs);
-			}
+				// there must be at least one blob
+				if test_tx.blob_versioned_hashes.is_empty() {
+					return Err(InvalidTxReason::EmptyBlobs);
+				}
 
-			// The field `to` deviates slightly from the semantics with the exception
-			// that it MUST NOT be nil and therefore must always represent
-			// a 20-byte address. This means that blob transactions cannot
-			// have the form of a create transaction.
-			let to_address: Option<Address> = test_tx.to.clone().into();
-			if to_address.is_none() {
-				return Err(InvalidTxReason::BlobCreateTransaction);
-			}
+				// The field `to` deviates slightly from the semantics with the exception
+				// that it MUST NOT be nil and therefore must always represent
+				// a 20-byte address. This means that blob transactions cannot
+				// have the form of a create transaction.
+				let to_address: Option<Address> = test_tx.to.clone().into();
+				if to_address.is_none() {
+					return Err(InvalidTxReason::BlobCreateTransaction);
+				}
 
-			// all versioned blob hashes must start with VERSIONED_HASH_VERSION_KZG
-			for blob in test_tx.blob_versioned_hashes.iter() {
-				let mut blob_hash = H256([0; 32]);
-				blob.to_big_endian(&mut blob_hash[..]);
-				if blob_hash[0] != VERSIONED_HASH_VERSION_KZG {
-					return Err(InvalidTxReason::BlobVersionNotSupported);
+				// all versioned blob hashes must start with VERSIONED_HASH_VERSION_KZG
+				for blob in test_tx.blob_versioned_hashes.iter() {
+					let mut blob_hash = H256([0; 32]);
+					blob.to_big_endian(&mut blob_hash[..]);
+					if blob_hash[0] != VERSIONED_HASH_VERSION_KZG {
+						return Err(InvalidTxReason::BlobVersionNotSupported);
+					}
+				}
+
+				// ensure the total blob gas spent is at most equal to the limit
+				// assert blob_gas_used <= MAX_BLOB_GAS_PER_BLOCK
+				if test_tx.blob_versioned_hashes.len() > MAX_BLOB_NUMBER_PER_BLOCK as usize {
+					return Err(InvalidTxReason::TooManyBlobs);
 				}
 			}
-
-			// ensure the total blob gas spent is at most equal to the limit
-			// assert blob_gas_used <= MAX_BLOB_GAS_PER_BLOCK
-			if test_tx.blob_versioned_hashes.len() > MAX_BLOB_NUMBER_PER_BLOCK as usize {
-				return Err(InvalidTxReason::TooManyBlobs);
+		} else {
+			if !test_tx.blob_versioned_hashes.is_empty() {
+				return Err(InvalidTxReason::BlobVersionedHashesNotSupported);
+			}
+			if test_tx.max_fee_per_blob_gas.is_some() {
+				return Err(InvalidTxReason::MaxFeePerBlobGasNotSupported);
 			}
 		}
 
@@ -288,5 +299,7 @@ pub mod transaction {
 		TooManyBlobs,
 		EmptyBlobs,
 		BlobGasPriceGreaterThanMax,
+		BlobVersionedHashesNotSupported,
+		MaxFeePerBlobGasNotSupported,
 	}
 }
