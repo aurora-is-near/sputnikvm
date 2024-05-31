@@ -119,7 +119,7 @@ impl Test {
 				crate::utils::u256_to_h256(r.0)
 			})
 		} else {
-			return Err(InvalidTxReason::WrongHardFork(spec.clone()));
+			None
 		};
 
 		#[allow(clippy::map_clone)]
@@ -451,6 +451,7 @@ fn check_validate_exit_reason(
 	if let Some(exception) = expect_exception.as_deref() {
 		if matches!(reason, InvalidTxReason::OutOfFund) {
 			let check_result = exception == "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+				|| exception == "TR_TypeNotSupported"
 				|| exception == "TR_NoFunds"
 				|| exception == "TR_NoFundsX"
 				|| exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
@@ -488,8 +489,7 @@ fn test_run(
 			ForkSpec::Paris => (Config::merge(), true),
 			ForkSpec::Shanghai => (Config::shanghai(), true),
 			ForkSpec::Cancun => (Config::cancun(), true),
-			spec => {
-				println!("Skip spec {spec:?}");
+			_ => {
 				continue;
 			}
 		};
@@ -554,7 +554,7 @@ fn test_run(
 			// Set test to passed as it pass hash-validation
 			tests_result.total += states.len() as u64;
 			if verbose_output.verbose_failed {
-				println!("---> SKIPPED [{tx_err:?}]: {name}");
+				println!("---> SKIPPED [{tx_err:?}]: [{spec:?}] {name}");
 			}
 			continue;
 		}

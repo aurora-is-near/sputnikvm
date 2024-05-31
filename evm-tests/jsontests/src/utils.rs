@@ -159,7 +159,6 @@ pub fn flush() {
 pub mod transaction {
 	use ethjson::hash::Address;
 	use ethjson::maybe::MaybeEmpty;
-	use ethjson::spec::ForkSpec;
 	use ethjson::test_helpers::state::MultiTransaction;
 	use ethjson::transaction::Transaction;
 	use ethjson::uint::Uint;
@@ -289,6 +288,5 @@ pub mod transaction {
 		TooManyBlobs,
 		EmptyBlobs,
 		BlobGasPriceGreaterThanMax,
-		WrongHardFork(ForkSpec),
 	}
 }
