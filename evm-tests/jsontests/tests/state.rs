@@ -75,7 +75,6 @@ const SKIPPED_CASES: &[&str] = &[
 ];
 
 fn should_skip(path: &Path) -> bool {
-	println!("{path:?}");
 	let matches = |case: &str| {
 		let file_stem = path.file_stem().unwrap();
 		let dir_path = path.parent().unwrap();

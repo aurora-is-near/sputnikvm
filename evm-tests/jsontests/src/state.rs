@@ -121,9 +121,7 @@ impl Test {
 		} else {
 			None
 		};
-
-		#[allow(clippy::map_clone)]
-		let blob_hashes = tx.blob_versioned_hashes.iter().map(|v| *v).collect();
+		let blob_hashes = tx.blob_versioned_hashes.clone();
 
 		Ok(MemoryVicinity {
 			gas_price,
@@ -518,14 +516,14 @@ fn check_validate_exit_reason(
 						|| exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for OutOfFund  for test: {name}"
+						"unexpected exception {exception:?} for OutOfFund for test: {name}"
 					);
 				}
 				InvalidTxReason::GasLimitReached => {
 					let check_result = exception == "TR_GasLimitReached";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for GasLimitReached  for test: {name}"
+						"unexpected exception {exception:?} for GasLimitReached for test: {name}"
 					);
 				}
 				InvalidTxReason::IntrinsicGas => {
@@ -536,7 +534,7 @@ fn check_validate_exit_reason(
 						|| exception == "TR_TypeNotSupported";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for IntrinsicGas  for test: {name}"
+						"unexpected exception {exception:?} for IntrinsicGas for test: {name}"
 					);
 				}
 				InvalidTxReason::BlobVersionNotSupported => {
@@ -545,14 +543,14 @@ fn check_validate_exit_reason(
 						|| exception == "TR_BLOBVERSION_INVALID";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for BlobVersionNotSupported  for test: {name}"
+						"unexpected exception {exception:?} for BlobVersionNotSupported for test: {name}"
 					);
 				}
 				InvalidTxReason::BlobCreateTransaction => {
 					let check_result = exception == "TR_BLOBCREATE";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for BlobCreateTransaction  for test: {name}"
+						"unexpected exception {exception:?} for BlobCreateTransaction for test: {name}"
 					);
 				}
 				InvalidTxReason::BlobGasPriceGreaterThanMax => {
@@ -560,7 +558,7 @@ fn check_validate_exit_reason(
 						exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for BlobGasPriceGreaterThanMax  for test: {name}"
+						"unexpected exception {exception:?} for BlobGasPriceGreaterThanMax for test: {name}"
 					);
 				}
 				InvalidTxReason::TooManyBlobs => {
@@ -568,7 +566,7 @@ fn check_validate_exit_reason(
 						|| exception == "TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for TooManyBlobs  for test: {name}"
+						"unexpected exception {exception:?} for TooManyBlobs for test: {name}"
 					);
 				}
 				InvalidTxReason::EmptyBlobs => {
@@ -576,7 +574,7 @@ fn check_validate_exit_reason(
 						|| exception == "TR_EMPTYBLOB";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for EmptyBlobs  for test: {name}"
+						"unexpected exception {exception:?} for EmptyBlobs for test: {name}"
 					);
 				}
 				InvalidTxReason::MaxFeePerBlobGasNotSupported => {
@@ -584,14 +582,14 @@ fn check_validate_exit_reason(
 						exception == "TransactionException.TYPE_3_TX_PRE_FORK|TransactionException.TYPE_3_TX_ZERO_BLOBS";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for MaxFeePerBlobGasNotSupported  for test: {name}"
+						"unexpected exception {exception:?} for MaxFeePerBlobGasNotSupported for test: {name}"
 					);
 				}
 				InvalidTxReason::BlobVersionedHashesNotSupported => {
 					let check_result = exception == "TransactionException.TYPE_3_TX_PRE_FORK";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for BlobVersionedHashesNotSupported  for test: {name}"
+						"unexpected exception {exception:?} for BlobVersionedHashesNotSupported for test: {name}"
 					);
 				}
 				_ => {
@@ -615,9 +613,6 @@ fn test_run(
 	let mut tests_result = TestExecutionResult::new();
 	let test_tx = &test.0.transaction;
 	for (spec, states) in &test.0.post_states {
-		// if name != "create2collisionSelfdestructedOOG" {
-		// 	continue;
-		// }
 		// Run tests for specific SPEC (Hard fork)
 		if let Some(s) = specific_spec.as_ref() {
 			if s != spec {
@@ -690,7 +685,7 @@ fn test_run(
 				});
 
 				if verbose_output.verbose_failed {
-					println!(" [{spec:?}]  {name}: {tx_err:?} ... validation failed\t<----");
+					println!(" [{spec:?}] {name}: {tx_err:?} ... validation failed\t<----");
 				}
 				tests_result.failed += 1;
 			}
@@ -819,7 +814,6 @@ fn test_run(
 						}
 					}
 				} else {
-					// TODOFEE
 					assert_empty_create_caller(&state.expect_exception, name);
 				}
 
@@ -858,12 +852,10 @@ fn test_run(
 
 				backend.apply(values, logs, delete_empty);
 			} else {
-				// TODOFEE
-				if let Some(_e) = state.expect_exception.as_ref() {
-					// println!("==> expect_exception: {e}");
-				} else {
-					panic!("{name}-{i}")
+				if let Some(e) = state.expect_exception.as_ref() {
+					panic!("unexpected exception: {e} for test {name}-{i}");
 				}
+				panic!("unexpected validation for test {name}-{i}")
 			}
 			let (is_valid_hash, actual_hash) =
 				crate::utils::assert_valid_hash(&state.hash.0, backend.state());
@@ -880,7 +872,7 @@ fn test_run(
 				tests_result.failed += 1;
 
 				if verbose_output.verbose_failed {
-					println!(" [{:?}]  {}:{} ... failed\t<----", spec, name, i);
+					println!(" [{spec:?}] {name}:{i} ... failed\t<----");
 				}
 				if verbose_output.print_state {
 					// Print detailed state data
