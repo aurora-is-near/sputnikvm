@@ -426,6 +426,30 @@ pub fn test(
 	child.join().unwrap()
 }
 
+/// Validate EIP-3607 - empty create caller
+fn assert_empty_create_caller(expect_exception: &Option<String>, name: &str) {
+	let exception = expect_exception
+		.as_deref()
+		.expect("expected evm-json-test exception");
+	let check_exception = exception == "SenderNotEOA";
+	assert!(
+		check_exception,
+		"expected EmptyCaller exception for test: {name}"
+	);
+}
+
+/// Check call expected exception
+fn assert_call_exit_exception(spec: &ForkSpec, expect_exception: &Option<String>) {
+	if *spec == ForkSpec::Berlin {
+		if let Some(exception) = expect_exception.as_deref() {
+			let check_result = exception == "TR_TypeNotSupported";
+			assert!(check_result, "expected call exception");
+		}
+	} else {
+		assert!(expect_exception.is_none(), "unexpected call exception");
+	}
+}
+
 /// Check Exit Reason of EVM execution
 fn check_create_exit_reason(
 	reason: &ExitReason,
@@ -763,6 +787,7 @@ fn test_run(
 						ethjson::maybe::MaybeEmpty::Some(to) => {
 							let value = transaction.value.into();
 
+							// Exit reason for Call do not analyzed as it mostly do not expect exceptions
 							let _reason = executor.transact_call(
 								caller,
 								to.into(),
@@ -771,10 +796,7 @@ fn test_run(
 								gas_limit,
 								access_list,
 							);
-							// TODOFEE
-							if let Some(e) = state.expect_exception.as_ref() {
-								panic!("==>[{spec:?}]  CALL expect_exception: {e} {_reason:?}");
-							}
+							assert_call_exit_exception(spec, &state.expect_exception);
 						}
 						ethjson::maybe::MaybeEmpty::None => {
 							let code = data;
@@ -798,9 +820,7 @@ fn test_run(
 					}
 				} else {
 					// TODOFEE
-					// if let Some(e) = state.expect_exception.as_ref() {
-					// 	println!("==> CALLER_CADE expect_exception: {e} {name}-{i}");
-					// }
+					assert_empty_create_caller(&state.expect_exception, name);
 				}
 
 				if verbose_output.print_state {
