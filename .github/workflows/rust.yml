@@ -75,4 +75,3 @@ jobs:
             ethtests/LegacyTests/Constantinople/VMTests/vmSha3Test \
             ethtests/LegacyTests/Constantinople/VMTests/vmSystemOperations \
             ethtests/LegacyTests/Constantinople/VMTests/vmTests
-  ≠
