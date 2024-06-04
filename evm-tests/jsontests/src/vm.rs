@@ -1,3 +1,4 @@
+use crate::state::{TestExecutionResult, VerboseOutput};
 use crate::utils::*;
 use evm::backend::{ApplyBackend, MemoryAccount, MemoryBackend, MemoryVicinity};
 use evm::executor::stack::{MemoryStackState, StackExecutor, StackSubstateMetadata};
@@ -76,7 +77,8 @@ impl Test {
 	}
 }
 
-pub fn test(name: &str, test: Test) {
+pub fn test(_verbose_output: &VerboseOutput, name: &str, test: Test) -> TestExecutionResult {
+	let result = TestExecutionResult::new();
 	print!("Running test {} ... ", name);
 	flush();
 
@@ -118,4 +120,5 @@ pub fn test(name: &str, test: Test) {
 	}
 
 	println!("succeed");
+	result
 }
