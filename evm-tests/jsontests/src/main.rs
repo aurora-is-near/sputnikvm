@@ -83,11 +83,11 @@ fn main() -> Result<(), String> {
 			} else if path.is_dir() {
 				run_vm_test_for_dir(&verbose_output, path, &mut tests_result);
 			}
-			println!("\nTOTAL: {}", tests_result.total);
-			println!("FAILED: {}\n", tests_result.failed);
-			if tests_result.failed != 0 {
-				return Err(format!("tests failed: {}", tests_result.failed));
-			}
+		}
+		println!("\nTOTAL: {}", tests_result.total);
+		println!("FAILED: {}\n", tests_result.failed);
+		if tests_result.failed != 0 {
+			return Err(format!("tests failed: {}", tests_result.failed));
 		}
 	}
 
