@@ -190,9 +190,9 @@ const SKIPPED_CASES: &[&str] = &[
 	"stTransactionTest/ValueOverflowParis",
 	// These tests are passing, but they take a lot of time to execute so can going to skip them.
 	// NOTE: do not remove it to know slowest tests. It's useful for development.
-	// "stTimeConsuming/static_Call50000_sha256",
-	// "vmPerformance/loopMul",
-	// "stTimeConsuming/CALLBlake2f_MaxRounds",
+	"stTimeConsuming/static_Call50000_sha256",
+	"vmPerformance/loopMul",
+	"stTimeConsuming/CALLBlake2f_MaxRounds",
 ];
 
 /// Check is path should be skip.
