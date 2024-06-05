@@ -55,15 +55,15 @@ jobs:
 
       - name: Run Ethereum state tests
         run: |
-          cargo run --release --features=enable-slow-tests  -p evm-jsontests -- \
+          cargo run -r -p evm-jsontests -F enable-slow-tests -- \
           	state -f -s cancun \
           	ethtests/GeneralStateTests/
 
       - name: Run Ethereum vm tests
         run: |
-          cargo run --release --features=enable-slow-tests  -p evm-jsontests -- \
+          cargo run -r -p evm-jsontests -F enable-slow-tests -- \
           	vm -f \
-          ethtests/LegacyTests/Constantinople/VMTests/vmArithmeticTest \
+            ethtests/LegacyTests/Constantinople/VMTests/vmArithmeticTest \
             ethtests/LegacyTests/Constantinople/VMTests/vmBitwiseLogicOperation \
             ethtests/LegacyTests/Constantinople/VMTests/vmBlockInfoTest \
             ethtests/LegacyTests/Constantinople/VMTests/vmEnvironmentalInfo \
