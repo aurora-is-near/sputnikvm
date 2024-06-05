@@ -76,7 +76,6 @@ force-debug = [
 ]
 create-fixed = []
 print-debug = ["evm-gasometer/print-debug"]
-# enable-slow-tests = ["evm-jsontests/enable-slow-tests"]
 
 [workspace]
 members = [
