@@ -188,6 +188,9 @@ const SKIPPED_CASES: &[&str] = &[
 	// custom json parser. https://github.com/ethereum/tests/issues/971
 	"stTransactionTest/ValueOverflow",
 	"stTransactionTest/ValueOverflowParis",
+	// It's impossible touch storage by precompiles
+	"stRevertTest/RevertPrecompiledTouch",
+	"stRevertTest/RevertPrecompiledTouch_storage",
 	// These tests are passing, but they take a lot of time to execute so can going to skip them.
 	// NOTE: do not remove it to know slowest tests. It's useful for development.
 	"stTimeConsuming/static_Call50000_sha256",
