@@ -87,7 +87,15 @@ impl Test {
 	) -> Result<MemoryVicinity, InvalidTxReason> {
 		let block_base_fee_per_gas = self.0.env.block_base_fee_per_gas.0;
 		let tx = &self.0.transaction;
-		let gas_price = tx.gas_price.or(tx.max_fee_per_gas).unwrap_or_default().0;
+		// Validation for EIP-1559 that was introduced in London hard fork
+		let gas_price = if *spec >= ForkSpec::London {
+			tx.gas_price.or(tx.max_fee_per_gas).unwrap_or_default().0
+		} else {
+			if tx.max_fee_per_gas.is_some() {
+				return Err(InvalidTxReason::GasPriseEip1559);
+			}
+			tx.gas_price.expect("expect gas price").0
+		};
 
 		// EIP-1559: priority fee must be lower than gas_price
 		if let Some(max_priority_fee_per_gas) = tx.max_priority_fee_per_gas {
@@ -919,6 +927,7 @@ fn test_run(
 			// Set test to passed as it pass hash-validation
 			tests_result.total += states.len() as u64;
 			if verbose_output.verbose_failed {
+				//println!("---> SKIPPED [{tx_err:?}]: [{spec:?}] {name} [{states:?}]");
 				println!("---> SKIPPED [{tx_err:?}]: [{spec:?}] {name}");
 			}
 			continue;
