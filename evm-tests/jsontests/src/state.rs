@@ -746,7 +746,7 @@ fn assert_vicinity_validation(
 					let is_checked = expected == "TR_TypeNotSupported";
 					assert!(
 						is_checked,
-						"unexpected error message {expected:?} for:  [{spec:?}] {name}:{i}",
+						"unexpected error message {expected:?} for: [{spec:?}] {name}:{i}",
 					);
 				}
 			}
@@ -1290,7 +1290,7 @@ fn test_run(
 					}
 				}
 			} else if verbose_output.very_verbose && !verbose_output.verbose_failed {
-				println!(" [{:?}]  {}:{} ... passed", spec, name, i);
+				println!(" [{:?}] {}:{} ... passed", spec, name, i);
 			}
 		}
 	}
