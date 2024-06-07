@@ -736,23 +736,7 @@ fn assert_vicinity_validation(
 	name: &str,
 ) {
 	match *spec {
-		ForkSpec::Istanbul => match reason {
-			InvalidTxReason::GasPriseEip1559 => {
-				for (i, state) in states.iter().enumerate() {
-					let expected = state
-						.expect_exception
-						.as_deref()
-						.expect("expected error message for test: [{spec}] {name}:{i}");
-					let is_checked = expected == "TR_TypeNotSupported";
-					assert!(
-						is_checked,
-						"unexpected error message {expected:?} for:  [{spec:?}] {name}:{i}",
-					);
-				}
-			}
-			_ => panic!("Unexpected validation reason: {reason:?} [{name}]"),
-		},
-		ForkSpec::Berlin => match reason {
+		ForkSpec::Istanbul | ForkSpec::Berlin => match reason {
 			InvalidTxReason::GasPriseEip1559 => {
 				for (i, state) in states.iter().enumerate() {
 					let expected = state
