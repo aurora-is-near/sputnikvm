@@ -189,13 +189,9 @@ const SKIPPED_CASES: &[&str] = &[
 	"stTransactionTest/ValueOverflow",
 	"stTransactionTest/ValueOverflowParis",
 	// It's impossible touch storage by precompiles
-	// NOTE: this tests related to hard forks: Londod and befor London
+	// NOTE: this tests related to hard forks: London and before London
 	"stRevertTest/RevertPrecompiledTouch",
 	"stRevertTest/RevertPrecompiledTouch_storage",
-	// For Berlin hard fork: txbyte is of type 02 and we don't parse tx bytes for this test to fail.
-	// NOTE: EIP-1559 started from London hard fork. In that particular test `gas_price`
-	// not set, but set `max_priority_fee_per_gas` that's wrong.
-	//"stEIP1559/typeTwoBerlin",
 	// These tests are passing, but they take a lot of time to execute so can going to skip them.
 	// NOTE: do not remove it to know slowest tests. It's useful for development.
 	"stTimeConsuming/static_Call50000_sha256",
