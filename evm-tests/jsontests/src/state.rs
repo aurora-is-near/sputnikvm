@@ -673,15 +673,11 @@ fn assert_empty_create_caller(expect_exception: &Option<String>, name: &str) {
 }
 
 /// Check call expected exception
-fn assert_call_exit_exception(spec: &ForkSpec, expect_exception: &Option<String>) {
-	if *spec == ForkSpec::Berlin {
-		if let Some(exception) = expect_exception.as_deref() {
-			let check_result = exception == "TR_TypeNotSupported";
-			assert!(check_result, "expected call exception");
-		}
-	} else {
-		assert!(expect_exception.is_none(), "unexpected call exception");
-	}
+fn assert_call_exit_exception(expect_exception: &Option<String>) {
+	assert!(
+		expect_exception.is_none(),
+		"unexpected call exception: {expect_exception:?}"
+	);
 }
 
 /// Check Exit Reason of EVM execution
@@ -899,6 +895,7 @@ fn check_validate_exit_reason(
 	reason: &InvalidTxReason,
 	expect_exception: &Option<String>,
 	name: &str,
+	spec: &ForkSpec,
 ) -> bool {
 	expect_exception.as_deref().map_or_else(
 		|| {
@@ -909,13 +906,12 @@ fn check_validate_exit_reason(
 				InvalidTxReason::OutOfFund => {
 					let check_result = exception
 						== "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
-						|| exception == "TR_TypeNotSupported"
 						|| exception == "TR_NoFunds"
 						|| exception == "TR_NoFundsX"
 						|| exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for OutOfFund for test: {name}"
+						"unexpected exception {exception:?} for OutOfFund for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::GasLimitReached => {
@@ -929,11 +925,10 @@ fn check_validate_exit_reason(
 					let check_result = exception == "TR_NoFundsOrGas"
 						|| exception == "TR_IntrinsicGas"
 						|| exception == "TransactionException.INTRINSIC_GAS_TOO_LOW"
-						|| exception == "IntrinsicGas"
-						|| exception == "TR_TypeNotSupported";
+						|| exception == "IntrinsicGas";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for IntrinsicGas for test: {name}"
+						"unexpected exception {exception:?} for IntrinsicGas for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::BlobVersionNotSupported => {
@@ -1107,7 +1102,7 @@ fn test_run(
 		for (i, state) in states.iter().enumerate() {
 			let transaction = test_tx.select(&state.indexes);
 			let mut backend = MemoryBackend::new(&vicinity, original_state.clone());
-
+			tests_result.total += 1;
 			// Test case may be expected to fail with an unsupported tx type if the current fork is
 			// older than Berlin (see EIP-2718). However, this is not implemented in sputnik itself and rather
 			// in the code hosting sputnik. https://github.com/rust-blockchain/evm/pull/40
@@ -1119,14 +1114,12 @@ fn test_run(
 						| ForkSpec::Homestead | ForkSpec::Byzantium
 						| ForkSpec::Constantinople
 						| ForkSpec::ConstantinopleFix
-						| ForkSpec::Istanbul
+						| ForkSpec::Istanbul | ForkSpec::Berlin
 				) && TxType::from_txbytes(&state.txbytes) != TxType::Legacy
 					&& state.expect_exception.as_deref() == Some("TR_TypeNotSupported");
 			if expect_tx_type_not_supported {
 				continue;
 			}
-
-			tests_result.total += 1;
 
 			let gas_limit: u64 = transaction.gas_limit.into();
 			let data: Vec<u8> = transaction.data.clone().into();
@@ -1143,7 +1136,7 @@ fn test_run(
 				spec,
 			);
 			if let Err(err) = &valid_tx {
-				if check_validate_exit_reason(err, &state.expect_exception, name) {
+				if check_validate_exit_reason(err, &state.expect_exception, name, spec) {
 					continue;
 				}
 			}
@@ -1189,7 +1182,7 @@ fn test_run(
 								gas_limit,
 								access_list,
 							);
-							assert_call_exit_exception(spec, &state.expect_exception);
+							assert_call_exit_exception(&state.expect_exception);
 						}
 						ethjson::maybe::MaybeEmpty::None => {
 							let code = data;
