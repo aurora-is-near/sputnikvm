@@ -918,7 +918,7 @@ fn check_validate_exit_reason(
 					let check_result = exception == "TR_GasLimitReached";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for GasLimitReached for test: {name}"
+						"unexpected exception {exception:?} for GasLimitReached for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::IntrinsicGas => {
@@ -937,14 +937,14 @@ fn check_validate_exit_reason(
 						|| exception == "TR_BLOBVERSION_INVALID";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for BlobVersionNotSupported for test: {name}"
+						"unexpected exception {exception:?} for BlobVersionNotSupported for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::BlobCreateTransaction => {
 					let check_result = exception == "TR_BLOBCREATE";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for BlobCreateTransaction for test: {name}"
+						"unexpected exception {exception:?} for BlobCreateTransaction for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::BlobGasPriceGreaterThanMax => {
@@ -952,7 +952,7 @@ fn check_validate_exit_reason(
 						exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for BlobGasPriceGreaterThanMax for test: {name}"
+						"unexpected exception {exception:?} for BlobGasPriceGreaterThanMax for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::TooManyBlobs => {
@@ -960,7 +960,7 @@ fn check_validate_exit_reason(
 						|| exception == "TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for TooManyBlobs for test: {name}"
+						"unexpected exception {exception:?} for TooManyBlobs for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::EmptyBlobs => {
@@ -968,7 +968,7 @@ fn check_validate_exit_reason(
 						|| exception == "TR_EMPTYBLOB";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for EmptyBlobs for test: {name}"
+						"unexpected exception {exception:?} for EmptyBlobs for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::MaxFeePerBlobGasNotSupported => {
@@ -976,19 +976,19 @@ fn check_validate_exit_reason(
 						exception == "TransactionException.TYPE_3_TX_PRE_FORK|TransactionException.TYPE_3_TX_ZERO_BLOBS";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for MaxFeePerBlobGasNotSupported for test: {name}"
+						"unexpected exception {exception:?} for MaxFeePerBlobGasNotSupported for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::BlobVersionedHashesNotSupported => {
 					let check_result = exception == "TransactionException.TYPE_3_TX_PRE_FORK";
 					assert!(
 						check_result,
-						"unexpected exception {exception:?} for BlobVersionedHashesNotSupported for test: {name}"
+						"unexpected exception {exception:?} for BlobVersionedHashesNotSupported for test: [{spec:?}] {name}"
 					);
 				}
 				_ => {
 					panic!(
-						"unexpected exception {exception:?} for reason {reason:?} for test {name}"
+						"unexpected exception {exception:?} for reason {reason:?} for test: [{spec:?}] {name}"
 					);
 				}
 			}
