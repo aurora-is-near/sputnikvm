@@ -9,8 +9,8 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
-auto_impl.workspace = true
-ethereum.workspace = true
+auto_impl = "1.0"
+ethereum = { version = "0.15", default-features = false }
 log = { version = "0.4", default-features = false }
 primitive-types = { version = "0.12", default-features = false, features = ["rlp"] }
 rlp = { version = "0.5", default-features = false }
@@ -85,11 +85,6 @@ description = "Portable Ethereum Virtual Machine implementation written in pure 
 repository = "https://github.com/sorpaas/rust-evm"
 keywords = ["no_std", "ethereum"]
 edition = "2021"
-
-[workspace.dependencies]
-auto_impl = "1.0"
-ethereum = { version = "0.15", default-features = false }
-primitive-types = { version = "0.12", default-features = false }
 
 [workspace]
 resolver = "2"

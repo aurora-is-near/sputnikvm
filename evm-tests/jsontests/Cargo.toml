@@ -1,17 +1,17 @@
 [package]
 name = "evm-jsontests"
-version = "0.43.0"
+version.workspace = true
 license = "GPL-3.0"
-authors = ["Aurora Labs <hello@aurora.dev>", "Wei Tang <hi@that.world>", "Parity Technologies <admin@parity.io>"]
-description = "SputnikVM - a Portable Blockchain Virtual Machine"
-repository = "https://github.com/sorpaas/rust-evm"
-keywords = ["no_std", "ethereum"]
-edition = "2021"
+authors.workspace = true
+description = "EVM jso tests"
+repository.workspace = true
+keywords.workspace = true
+edition.workspace = true
 
 [dependencies]
 evm = { path = "../..", version = "0.43" }
-ethereum.workspace = true
-primitive-types.workspace = true
+ethereum = "0.15.0"
+primitive-types = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 hex = "0.4"
