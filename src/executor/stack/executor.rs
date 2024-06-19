@@ -703,7 +703,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		self.state.basic(address).nonce
 	}
 
-	/// Check is an existing account the "create collision".
+	/// Check if the existing account is "create collision".    
 	/// [EIP-7610](https://eips.ethereum.org/EIPS/eip-7610)
 	pub fn is_create_collision(&self, address: H160) -> bool {
 		self.code_size(address) != U256::zero()
