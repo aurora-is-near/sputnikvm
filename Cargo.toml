@@ -8,6 +8,12 @@ repository = "https://github.com/sorpaas/rust-evm"
 keywords = ["no_std", "ethereum"]
 edition = "2021"
 
+[workspace.dependencies]
+evm = { version = "0.42", path = "." }
+evm-core = { version = "0.42", path = "core", default-features = false }
+evm-gasometer = { version = "0.42", path = "gasometer", default-features = false }
+evm-runtime = { version = "0.42", path = "runtime", default-features = false }
+
 [dependencies]
 auto_impl = "1.0"
 ethereum = { version = "0.15", default-features = false }
@@ -22,9 +28,9 @@ scale-codec = { package = "parity-scale-codec", version = "3.2", default-feature
 scale-info = { version = "2.11", default-features = false, features = ["derive"], optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 
-evm-core = { version = "0.42", path = "core", default-features = false }
-evm-gasometer = { version = "0.42", path = "gasometer", default-features = false }
-evm-runtime = { version = "0.42", path = "runtime", default-features = false }
+evm-core.workspace = true
+evm-gasometer.workspace = true
+evm-runtime.workspace = true
 
 [dev-dependencies]
 criterion = "0.5"
