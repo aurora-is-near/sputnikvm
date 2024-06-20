@@ -1,12 +1,12 @@
 [package]
 name = "evm"
-version = "0.42.0"
-license = "Apache-2.0"
-authors = ["Wei Tang <hi@that.world>", "Parity Technologies <admin@parity.io>"]
-description = "SputnikVM - a Portable Blockchain Virtual Machine"
-repository = "https://github.com/sorpaas/rust-evm"
-keywords = ["no_std", "ethereum"]
-edition = "2021"
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+keywords.workspace = true
+edition.workspace = true
 
 [workspace.dependencies]
 evm = { version = "0.42", path = "." }
@@ -83,7 +83,17 @@ force-debug = [
 create-fixed = []
 print-debug = ["evm-gasometer/print-debug"]
 
+[workspace.package]
+version = "0.43.0"
+license = "Apache-2.0"
+authors = ["Aurora Labs <hello@aurora.dev>", "Wei Tang <hi@that.world>", "Parity Technologies <admin@parity.io>"]
+description = "Portable Ethereum Virtual Machine implementation written in pure Rust."
+repository = "https://github.com/sorpaas/rust-evm"
+keywords = ["no_std", "ethereum"]
+edition = "2021"
+
 [workspace]
+resolver = "2"
 members = [
     "core",
     "gasometer",
