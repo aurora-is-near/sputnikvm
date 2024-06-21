@@ -1,8 +1,10 @@
 use crate::backend::{Apply, Backend, Basic, Log};
 use crate::executor::stack::executor::{Accessed, StackState, StackSubstateMetadata};
+use crate::prelude::Rc;
 use crate::prelude::*;
 use crate::{ExitError, Transfer};
 use core::mem;
+use evm_core::utils::U64_MAX;
 use primitive_types::{H160, H256, U256};
 
 #[derive(Clone, Debug)]
@@ -17,7 +19,7 @@ pub struct MemoryStackSubstate<'config> {
 	metadata: StackSubstateMetadata<'config>,
 	parent: Option<Box<MemoryStackSubstate<'config>>>,
 	logs: Vec<Log>,
-	accounts: BTreeMap<H160, MemoryStackAccount>,
+	accounts: Rc<RefCell<BTreeMap<H160, MemoryStackAccount>>>,
 	storages: BTreeMap<(H160, H256), H256>,
 	tstorages: BTreeMap<(H160, H256), U256>,
 	deletes: BTreeSet<H160>,
@@ -25,12 +27,12 @@ pub struct MemoryStackSubstate<'config> {
 }
 
 impl<'config> MemoryStackSubstate<'config> {
-	pub const fn new(metadata: StackSubstateMetadata<'config>) -> Self {
+	pub fn new(metadata: StackSubstateMetadata<'config>) -> Self {
 		Self {
 			metadata,
 			parent: None::<Box<_>>,
 			logs: Vec::new(),
-			accounts: BTreeMap::new(),
+			accounts: Rc::new(RefCell::new(BTreeMap::new())),
 			storages: BTreeMap::new(),
 			tstorages: BTreeMap::new(),
 			deletes: BTreeSet::new(),
@@ -58,7 +60,7 @@ impl<'config> MemoryStackSubstate<'config> {
 	/// substate is not in the top-level substate.
 	#[must_use]
 	pub fn deconstruct<B: Backend>(
-		mut self,
+		self,
 		backend: &B,
 	) -> (
 		impl IntoIterator<Item = Apply<impl IntoIterator<Item = (H256, H256)>>>,
@@ -70,7 +72,7 @@ impl<'config> MemoryStackSubstate<'config> {
 
 		let mut addresses = BTreeSet::new();
 
-		for address in self.accounts.keys() {
+		for address in self.accounts.borrow().keys() {
 			addresses.insert(*address);
 		}
 
@@ -91,18 +93,14 @@ impl<'config> MemoryStackSubstate<'config> {
 			}
 
 			let apply = {
-				let account = if self.is_created(address) {
-					let account = self
-						.accounts
-						.get_mut(&address)
-						.expect("New account was just inserted");
+				if self.is_created(address) {
 					// Reset storage for CREATE call as initially it's always should be empty.
 					// NOTE: related to `ethereum-tests`: `stSStoreTest/InitCollisionParis.json`
-					account.reset = true;
-					account
-				} else {
-					self.account_mut(address, backend)
-				};
+					if let Some(account) = self.accounts.borrow_mut().get_mut(&address) {
+						account.reset = true;
+					}
+				}
+				let account = self.account_mut(address, backend);
 
 				Apply::Modify {
 					address,
@@ -128,7 +126,7 @@ impl<'config> MemoryStackSubstate<'config> {
 			metadata: self.metadata.spit_child(gas_limit, is_static),
 			parent: None,
 			logs: Vec::new(),
-			accounts: BTreeMap::new(),
+			accounts: Rc::new(RefCell::new(BTreeMap::new())),
 			storages: BTreeMap::new(),
 			tstorages: BTreeMap::new(),
 			deletes: BTreeSet::new(),
@@ -147,7 +145,7 @@ impl<'config> MemoryStackSubstate<'config> {
 		self.logs.append(&mut exited.logs);
 
 		let mut resets = BTreeSet::new();
-		for (address, account) in &exited.accounts {
+		for (address, account) in exited.accounts.borrow().iter() {
 			if account.reset {
 				resets.insert(*address);
 			}
@@ -162,7 +160,9 @@ impl<'config> MemoryStackSubstate<'config> {
 			self.storages.remove(&(address, key));
 		}
 
-		self.accounts.append(&mut exited.accounts);
+		self.accounts
+			.borrow_mut()
+			.append(&mut exited.accounts.borrow_mut());
 		self.storages.append(&mut exited.storages);
 		self.tstorages.append(&mut exited.tstorages);
 		self.deletes.append(&mut exited.deletes);
@@ -189,23 +189,24 @@ impl<'config> MemoryStackSubstate<'config> {
 		Ok(())
 	}
 
-	pub fn known_account(&self, address: H160) -> Option<&MemoryStackAccount> {
-		self.accounts.get(&address).map_or_else(
+	/// Get account from cache
+	pub fn known_account(&self, address: H160) -> Option<MemoryStackAccount> {
+		self.accounts.borrow().get(&address).map_or_else(
 			|| {
 				self.parent
 					.as_ref()
 					.and_then(|parent| parent.known_account(address))
 			},
-			Some,
+			|account| Some(account.clone()),
 		)
 	}
 
 	pub fn known_basic(&self, address: H160) -> Option<Basic> {
-		self.known_account(address).map(|acc| acc.basic.clone())
+		self.known_account(address).map(|acc| acc.basic)
 	}
 
 	pub fn known_code(&self, address: H160) -> Option<Vec<u8>> {
-		self.known_account(address).and_then(|acc| acc.code.clone())
+		self.known_account(address).and_then(|acc| acc.code)
 	}
 
 	pub fn known_empty(&self, address: H160) -> Option<bool> {
@@ -219,11 +220,8 @@ impl<'config> MemoryStackSubstate<'config> {
 			}
 
 			if let Some(code) = &account.code {
-				return Some(
-					account.basic.balance == U256::zero()
-						&& account.basic.nonce == U256::zero()
-						&& code.is_empty(),
-				);
+				// As we checked earlier `balance` and `nonce`, we checking only `code`
+				return Some(code.is_empty());
 			}
 		}
 
@@ -235,7 +233,7 @@ impl<'config> MemoryStackSubstate<'config> {
 			return Some(*value);
 		}
 
-		if let Some(account) = self.accounts.get(&address) {
+		if let Some(account) = self.accounts.borrow().get(&address) {
 			if account.reset {
 				return Some(H256::default());
 			}
@@ -249,7 +247,7 @@ impl<'config> MemoryStackSubstate<'config> {
 	}
 
 	pub fn known_original_storage(&self, address: H160) -> Option<H256> {
-		if let Some(account) = self.accounts.get(&address) {
+		if let Some(account) = self.accounts.borrow().get(&address) {
 			if account.reset {
 				return Some(H256::default());
 			}
@@ -295,11 +293,10 @@ impl<'config> MemoryStackSubstate<'config> {
 	}
 
 	#[allow(clippy::map_entry)]
-	fn account_mut<B: Backend>(&mut self, address: H160, backend: &B) -> &mut MemoryStackAccount {
-		if !self.accounts.contains_key(&address) {
+	fn account_mut<B: Backend>(&self, address: H160, backend: &B) -> MemoryStackAccount {
+		if !self.accounts.borrow().contains_key(&address) {
 			let account = self
 				.known_account(address)
-				.cloned()
 				.map(|mut v| {
 					v.reset = false;
 					v
@@ -309,20 +306,24 @@ impl<'config> MemoryStackSubstate<'config> {
 					code: None::<Vec<_>>,
 					reset: false,
 				});
-			self.accounts.insert(address, account);
+			self.accounts.borrow_mut().insert(address, account);
 		}
 
 		self.accounts
-			.get_mut(&address)
+			.borrow()
+			.get(&address)
 			.expect("New account was just inserted")
+			.clone()
 	}
 
 	pub fn inc_nonce<B: Backend>(&mut self, address: H160, backend: &B) -> Result<(), ExitError> {
-		let nonce = &mut self.account_mut(address, backend).basic.nonce;
-		if *nonce >= U256::from(u64::MAX) {
-			return Err(ExitError::MaxNonce);
+		self.account_mut(address, backend);
+		if let Some(account) = self.accounts.borrow_mut().get_mut(&address) {
+			if account.basic.nonce >= U64_MAX {
+				return Err(ExitError::MaxNonce);
+			}
+			account.basic.nonce += U256::one();
 		}
-		*nonce += U256::one();
 		Ok(())
 	}
 
@@ -374,7 +375,10 @@ impl<'config> MemoryStackSubstate<'config> {
 	}
 
 	pub fn set_code<B: Backend>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
-		self.account_mut(address, backend).code = Some(code);
+		self.account_mut(address, backend);
+		if let Some(account) = self.accounts.borrow_mut().get_mut(&address) {
+			account.code = Some(code);
+		}
 	}
 
 	pub fn transfer<B: Backend>(
@@ -387,12 +391,16 @@ impl<'config> MemoryStackSubstate<'config> {
 			if source.basic.balance < transfer.value {
 				return Err(ExitError::OutOfFund);
 			}
-			source.basic.balance -= transfer.value;
+			if let Some(account) = self.accounts.borrow_mut().get_mut(&transfer.source) {
+				account.basic.balance -= transfer.value;
+			}
 		}
 
 		{
-			let target = self.account_mut(transfer.target, backend);
-			target.basic.balance = target.basic.balance.saturating_add(transfer.value);
+			self.account_mut(transfer.target, backend);
+			if let Some(account) = self.accounts.borrow_mut().get_mut(&transfer.target) {
+				account.basic.balance = account.basic.balance.saturating_add(transfer.value);
+			}
 		}
 
 		Ok(())
@@ -409,19 +417,26 @@ impl<'config> MemoryStackSubstate<'config> {
 		if source.basic.balance < value {
 			return Err(ExitError::OutOfFund);
 		}
-		source.basic.balance -= value;
+		if let Some(account) = self.accounts.borrow_mut().get_mut(&address) {
+			account.basic.balance -= value;
+		}
 
 		Ok(())
 	}
 
 	// Only needed for jsontests.
 	pub fn deposit<B: Backend>(&mut self, address: H160, value: U256, backend: &B) {
-		let target = self.account_mut(address, backend);
-		target.basic.balance = target.basic.balance.saturating_add(value);
+		self.account_mut(address, backend);
+		if let Some(account) = self.accounts.borrow_mut().get_mut(&address) {
+			account.basic.balance = account.basic.balance.saturating_add(value);
+		}
 	}
 
 	pub fn reset_balance<B: Backend>(&mut self, address: H160, backend: &B) {
-		self.account_mut(address, backend).basic.balance = U256::zero();
+		self.account_mut(address, backend);
+		if let Some(account) = self.accounts.borrow_mut().get_mut(&address) {
+			account.basic.balance = U256::zero();
+		}
 	}
 
 	pub fn touch<B: Backend>(&mut self, address: H160, backend: &B) {
@@ -496,7 +511,7 @@ impl<'backend, 'config, B: Backend> Backend for MemoryStackState<'backend, 'conf
 	fn basic(&self, address: H160) -> Basic {
 		self.substate
 			.known_basic(address)
-			.unwrap_or_else(|| self.backend.basic(address))
+			.unwrap_or_else(|| self.account_mut(address).basic)
 	}
 
 	fn code(&self, address: H160) -> Vec<u8> {
@@ -632,7 +647,7 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 }
 
 impl<'backend, 'config, B: Backend> MemoryStackState<'backend, 'config, B> {
-	pub const fn new(metadata: StackSubstateMetadata<'config>, backend: &'backend B) -> Self {
+	pub fn new(metadata: StackSubstateMetadata<'config>, backend: &'backend B) -> Self {
 		Self {
 			backend,
 			substate: MemoryStackSubstate::new(metadata),
@@ -640,7 +655,7 @@ impl<'backend, 'config, B: Backend> MemoryStackState<'backend, 'config, B> {
 	}
 
 	/// Returns a mutable reference to an account given its address
-	pub fn account_mut(&mut self, address: H160) -> &mut MemoryStackAccount {
+	pub fn account_mut(&self, address: H160) -> MemoryStackAccount {
 		self.substate.account_mut(address, self.backend)
 	}
 
