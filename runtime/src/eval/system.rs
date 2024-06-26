@@ -4,7 +4,7 @@ use crate::{
 	CallScheme, Capture, Context, CreateScheme, ExitError, ExitSucceed, Handler, Runtime, Transfer,
 };
 use core::cmp::max;
-use evm_core::utils::U64_MAX;
+use evm_core::utils::{U64_MAX, USIZE_MAX};
 use primitive_types::{H256, U256};
 use sha3::{Digest, Keccak256};
 
@@ -112,7 +112,7 @@ pub fn blob_hash<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 		Err(e) => return Control::Exit(e.into()),
 	};
 	// Safely cast to usize
-	let index = if raw_index > usize::MAX.into() {
+	let index = if raw_index > USIZE_MAX {
 		usize::MAX
 	} else {
 		raw_index.as_usize()
