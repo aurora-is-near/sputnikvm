@@ -12,8 +12,7 @@ pub fn codesize(state: &mut Machine) -> Control {
 
 #[inline]
 pub fn codecopy(state: &mut Machine) -> Control {
-	pop_u256!(state, memory_offset);
-	pop_u256!(state, code_offset, len);
+	pop_u256!(state, memory_offset, code_offset, len);
 
 	// If `len` is zero then nothing happens, regardless of the
 	// value of the other parameters. In particular, `memory_offset`
@@ -138,8 +137,7 @@ pub fn jump(state: &mut Machine) -> Control {
 
 #[inline]
 pub fn jumpi(state: &mut Machine) -> Control {
-	pop_u256!(state, dest);
-	pop_u256!(state, value);
+	pop_u256!(state, dest, value);
 
 	if value == U256::zero() {
 		Control::Continue(1)
