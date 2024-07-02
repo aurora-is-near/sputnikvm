@@ -486,7 +486,7 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 	let in_offset = if in_len == U256::zero() {
 		usize::MAX
 	} else {
-		in_offset.as_usize()
+		as_usize_or_fail!(in_offset)
 	};
 	let in_len = as_usize_or_fail!(in_len);
 	// Cast to `usize` after length checking to avoid overflow
