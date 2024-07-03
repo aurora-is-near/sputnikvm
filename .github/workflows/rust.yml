@@ -7,6 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  ETHTESTS_VERSION: v14.0
 
 jobs:
   lint:
@@ -78,7 +79,7 @@ jobs:
         with:
           repository: ethereum/tests
           path: ethtests
-          ref: v14.0
+          ref: ${{ env.ETHTESTS_VERSION }}
           submodules: recursive
           fetch-depth: 1
 
@@ -116,7 +117,7 @@ jobs:
         with:
           repository: ethereum/tests
           path: ethtests
-          ref: v13.3
+          ref: ${{ env.ETHTESTS_VERSION }}
           submodules: recursive
           fetch-depth: 1
 
