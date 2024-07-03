@@ -1,0 +1,23 @@
+[package]
+name = "aurora-evm-jsontests"
+version.workspace = true
+license = "MIT"
+authors = ["Aurora Labs <hello@aurora.dev>"]
+edition.workspace = true
+keywords = ["evm", "ethereum", "jsontests"]
+description = "Aurora EVM Ethereum jsontests utility"
+repository = "https://github.com/aurora-is-near/sputnikvm"
+
+[dependencies]
+evm.workspace = true
+
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+primitive-types = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+enable-slow-tests = []
