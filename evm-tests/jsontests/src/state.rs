@@ -10,6 +10,7 @@ use evm::executor::stack::{
 	MemoryStackState, PrecompileFailure, PrecompileFn, PrecompileOutput, StackExecutor,
 	StackSubstateMetadata,
 };
+use evm::utils::U64_MAX;
 use evm::{Config, Context, ExitError, ExitReason, ExitSucceed};
 use lazy_static::lazy_static;
 use libsecp256k1::SecretKey;
@@ -239,7 +240,7 @@ impl JsonPrecompile {
 		let cost = builtin.cost(input, 0);
 
 		if let Some(target_gas) = gas_limit {
-			if cost > U256::from(u64::MAX) || target_gas < cost.as_u64() {
+			if cost > U64_MAX || target_gas < cost.as_u64() {
 				return Err(PrecompileFailure::Error {
 					exit_status: ExitError::OutOfGas,
 				});
@@ -665,10 +666,11 @@ fn assert_empty_create_caller(expect_exception: &Option<String>, name: &str) {
 	let exception = expect_exception
 		.as_deref()
 		.expect("expected evm-json-test exception");
-	let check_exception = exception == "SenderNotEOA";
+	let check_exception =
+		exception == "SenderNotEOA" || exception == "TransactionException.SENDER_NOT_EOA";
 	assert!(
 		check_exception,
-		"expected EmptyCaller exception for test: {name}"
+		"expected EmptyCaller exception for test: {name}: {expect_exception:?}"
 	);
 }
 
@@ -700,7 +702,8 @@ fn check_create_exit_reason(
 						return true;
 					}
 					ExitError::MaxNonce => {
-						let check_result = exception == "TR_NonceHasMaxValue";
+						let check_result = exception == "TR_NonceHasMaxValue"
+							|| exception == "TransactionException.NONCE_IS_MAX";
 						assert!(check_result,
 								"unexpected exception {exception:?} for MaxNonce error for test: {name}"
 						);
@@ -743,7 +746,8 @@ fn assert_vicinity_validation(
 						.expect_exception
 						.as_deref()
 						.expect("expected error message for test: [{spec}] {name}:{i}");
-					let is_checked = expected == "TR_TypeNotSupported";
+					let is_checked =
+						expected == "TR_TypeNotSupported" || expected == "TR_TypeNotSupportedBlob";
 					assert!(
 						is_checked,
 						"unexpected error message {expected:?} for: [{spec:?}] {name}:{i}",
@@ -840,36 +844,37 @@ fn assert_vicinity_validation(
 				_ => panic!("Unexpected validation reason: {reason:?} [{spec:?}] {name}"),
 			}
 		}
-		ForkSpec::Cancun => {
-			match reason {
-				InvalidTxReason::PriorityFeeTooLarge => {
-					for (i, state) in states.iter().enumerate() {
-						let expected = state.expect_exception.as_deref().expect(
-							"expected error message for test: {reason:?} [{spec}] {name}:{i}",
-						);
-						let is_checked = expected == "TR_TipGtFeeCap";
-						assert!(
+		ForkSpec::Cancun => match reason {
+			InvalidTxReason::PriorityFeeTooLarge => {
+				for (i, state) in states.iter().enumerate() {
+					let expected = state
+						.expect_exception
+						.as_deref()
+						.expect("expected error message for test: {reason:?} [{spec}] {name}:{i}");
+					let is_checked = expected == "TR_TipGtFeeCap"
+						|| expected == "TransactionException.PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS";
+					assert!(
 							is_checked,
 							"unexpected error message {expected:?} for: {reason:?} [{spec:?}] {name}:{i}",
 						);
-					}
 				}
-				InvalidTxReason::GasPriceLessThenBlockBaseFee => {
-					for (i, state) in states.iter().enumerate() {
-						let expected = state.expect_exception.as_deref().expect(
-							"expected error message for test: {reason:?} [{spec}] {name}:{i}",
-						);
-						let is_checked = expected == "TR_FeeCapLessThanBlocks"
-							|| expected == "TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS";
-						assert!(
-							is_checked,
-							"unexpected error message {expected:?} for: {reason:?} [{spec:?}] {name}:{i}",
-						);
-					}
-				}
-				_ => panic!("Unexpected validation reason: {reason:?} [{spec:?}] {name}"),
 			}
-		}
+			InvalidTxReason::GasPriceLessThenBlockBaseFee => {
+				for (i, state) in states.iter().enumerate() {
+					let expected = state
+						.expect_exception
+						.as_deref()
+						.expect("expected error message for test: {reason:?} [{spec}] {name}:{i}");
+					let is_checked = expected == "TR_FeeCapLessThanBlocks"
+						|| expected == "TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS";
+					assert!(
+							is_checked,
+							"unexpected error message {expected:?} for: {reason:?} [{spec:?}] {name}:{i}",
+						);
+				}
+			}
+			_ => panic!("Unexpected validation reason: {reason:?} [{spec:?}] {name}"),
+		},
 		_ => panic!("Unexpected validation reason: {reason:?} [{spec:?}] {name}"),
 	}
 }
@@ -892,14 +897,16 @@ fn check_validate_exit_reason(
 						== "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
 						|| exception == "TR_NoFunds"
 						|| exception == "TR_NoFundsX"
-						|| exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS";
+						|| exception == "TransactionException.INSUFFICIENT_MAX_FEE_PER_BLOB_GAS"
+						|| exception=="TransactionException.INSUFFICIENT_ACCOUNT_FUNDS|TransactionException.GASLIMIT_PRICE_PRODUCT_OVERFLOW";
 					assert!(
 						check_result,
 						"unexpected exception {exception:?} for OutOfFund for test: [{spec:?}] {name}"
 					);
 				}
 				InvalidTxReason::GasLimitReached => {
-					let check_result = exception == "TR_GasLimitReached";
+					let check_result = exception == "TR_GasLimitReached"
+						|| exception == "TransactionException.GAS_ALLOWANCE_EXCEEDED";
 					assert!(
 						check_result,
 						"unexpected exception {exception:?} for GasLimitReached for test: [{spec:?}] {name}"
@@ -909,7 +916,8 @@ fn check_validate_exit_reason(
 					let check_result = exception == "TR_NoFundsOrGas"
 						|| exception == "TR_IntrinsicGas"
 						|| exception == "TransactionException.INTRINSIC_GAS_TOO_LOW"
-						|| exception == "IntrinsicGas";
+						|| exception == "IntrinsicGas"
+						|| exception == "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS|TransactionException.INTRINSIC_GAS_TOO_LOW";
 					assert!(
 						check_result,
 						"unexpected exception {exception:?} for IntrinsicGas for test: [{spec:?}] {name}"
@@ -925,7 +933,8 @@ fn check_validate_exit_reason(
 					);
 				}
 				InvalidTxReason::BlobCreateTransaction => {
-					let check_result = exception == "TR_BLOBCREATE";
+					let check_result = exception == "TR_BLOBCREATE"
+						|| exception == "TransactionException.TYPE_3_TX_CONTRACT_CREATION";
 					assert!(
 						check_result,
 						"unexpected exception {exception:?} for BlobCreateTransaction for test: [{spec:?}] {name}"
@@ -964,7 +973,8 @@ fn check_validate_exit_reason(
 					);
 				}
 				InvalidTxReason::BlobVersionedHashesNotSupported => {
-					let check_result = exception == "TransactionException.TYPE_3_TX_PRE_FORK";
+					let check_result = exception == "TransactionException.TYPE_3_TX_PRE_FORK"
+						|| exception == "TR_TypeNotSupportedBlob";
 					assert!(
 						check_result,
 						"unexpected exception {exception:?} for BlobVersionedHashesNotSupported for test: [{spec:?}] {name}"
