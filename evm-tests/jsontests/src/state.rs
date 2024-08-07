@@ -1015,6 +1015,7 @@ fn test_run(
 			ForkSpec::Paris => (Config::merge(), true),
 			ForkSpec::Shanghai => (Config::shanghai(), true),
 			ForkSpec::Cancun => (Config::cancun(), true),
+			ForkSpec::Prague => (Config::prague(), true),
 			_ => {
 				continue;
 			}

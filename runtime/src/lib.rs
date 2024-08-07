@@ -275,6 +275,8 @@ pub struct Config {
 	pub has_mcopy: bool,
 	/// SELFDESTRUCT restriction: EIP-6780
 	pub has_restricted_selfdestruct: bool,
+	/// EIP-7702
+	pub has_authorization_list: bool,
 }
 
 impl Config {
@@ -334,6 +336,7 @@ impl Config {
 			has_transient_storage: false,
 			has_mcopy: false,
 			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
 		}
 	}
 
@@ -393,6 +396,7 @@ impl Config {
 			has_transient_storage: false,
 			has_mcopy: false,
 			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
 		}
 	}
 
@@ -421,6 +425,11 @@ impl Config {
 		Self::config_with_derived_values(DerivedConfigInputs::cancun())
 	}
 
+	/// Prague hard fork configuration.
+	pub const fn prague() -> Self {
+		Self::config_with_derived_values(DerivedConfigInputs::prague())
+	}
+
 	const fn config_with_derived_values(inputs: DerivedConfigInputs) -> Self {
 		let DerivedConfigInputs {
 			gas_storage_read_warm,
@@ -437,6 +446,7 @@ impl Config {
 			has_transient_storage,
 			has_mcopy,
 			has_restricted_selfdestruct,
+			has_authorization_list,
 		} = inputs;
 
 		// See https://eips.ethereum.org/EIPS/eip-2929
@@ -505,6 +515,7 @@ impl Config {
 			has_transient_storage,
 			has_mcopy,
 			has_restricted_selfdestruct,
+			has_authorization_list,
 		}
 	}
 }
@@ -526,6 +537,7 @@ struct DerivedConfigInputs {
 	has_transient_storage: bool,
 	has_mcopy: bool,
 	has_restricted_selfdestruct: bool,
+	has_authorization_list: bool,
 }
 
 impl DerivedConfigInputs {
@@ -545,6 +557,7 @@ impl DerivedConfigInputs {
 			has_transient_storage: false,
 			has_mcopy: false,
 			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
 		}
 	}
 
@@ -564,6 +577,7 @@ impl DerivedConfigInputs {
 			has_transient_storage: false,
 			has_mcopy: false,
 			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
 		}
 	}
 
@@ -583,6 +597,7 @@ impl DerivedConfigInputs {
 			has_transient_storage: false,
 			has_mcopy: false,
 			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
 		}
 	}
 
@@ -603,6 +618,7 @@ impl DerivedConfigInputs {
 			has_transient_storage: false,
 			has_mcopy: false,
 			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
 		}
 	}
 
@@ -623,6 +639,13 @@ impl DerivedConfigInputs {
 			has_transient_storage: true,
 			has_mcopy: true,
 			has_restricted_selfdestruct: true,
+			has_authorization_list: false,
 		}
+	}
+
+	const fn prague() -> Self {
+		let mut config = Self::cancun();
+		config.has_authorization_list = true;
+		config
 	}
 }
