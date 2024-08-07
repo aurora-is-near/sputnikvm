@@ -2,6 +2,7 @@
 
 #![deny(warnings)]
 #![forbid(unsafe_code, unused_variables)]
+#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(feature = "std"))]

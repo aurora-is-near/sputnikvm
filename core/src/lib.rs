@@ -62,6 +62,8 @@ pub trait InterpreterHandler {
 
 	fn after_eval(&mut self);
 
+	/// # Errors
+	/// Return `ExitError`
 	fn before_bytecode(
 		&mut self,
 		opcode: Opcode,
@@ -169,8 +171,11 @@ impl Machine {
 		}
 	}
 
-	#[inline]
 	/// Step the machine, executing until exit or trap.
+	///
+	/// # Errors
+	/// Return `Capture<ExitReason, Trap>`
+	#[inline]
 	pub fn step<H: InterpreterHandler>(
 		&mut self,
 		handler: &mut H,

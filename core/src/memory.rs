@@ -186,6 +186,9 @@ impl Memory {
 	}
 
 	/// Copy `data` into the memory, of given `len`.
+	///
+	/// # Errors
+	/// Return `ExitFatal`
 	pub fn copy_large(
 		&mut self,
 		memory_offset: usize,

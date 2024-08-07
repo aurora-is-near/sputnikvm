@@ -15,10 +15,10 @@ pub enum Sign {
 }
 
 const SIGN_BIT_MASK: U256 = U256([
-	0xffffffffffffffff,
-	0xffffffffffffffff,
-	0xffffffffffffffff,
-	0x7fffffffffffffff,
+	0xffff_ffff_ffff_ffff,
+	0xffff_ffff_ffff_ffff,
+	0xffff_ffff_ffff_ffff,
+	0x7fff_ffff_ffff_ffff,
 ]);
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -26,10 +26,12 @@ pub struct I256(pub Sign, pub U256);
 
 impl I256 {
 	/// Zero value of I256.
+	#[must_use]
 	pub const fn zero() -> Self {
 		Self(Sign::Zero, U256::zero())
 	}
 	/// Minimum value of I256.
+	#[must_use]
 	pub fn min_value() -> Self {
 		Self(Sign::Minus, (U256::MAX & SIGN_BIT_MASK) + U256::from(1u64))
 	}
@@ -107,15 +109,13 @@ impl Div for I256 {
 		}
 
 		match (self.0, other.0) {
-			(Sign::Zero, Sign::Plus)
-			| (Sign::Plus, Sign::Zero)
-			| (Sign::Zero, Sign::Zero)
-			| (Sign::Plus, Sign::Plus)
+			(Sign::Zero | Sign::Plus, Sign::Plus)
+			| (Sign::Plus | Sign::Zero, Sign::Zero)
 			| (Sign::Minus, Sign::Minus) => Self(Sign::Plus, d),
-			(Sign::Zero, Sign::Minus)
-			| (Sign::Plus, Sign::Minus)
-			| (Sign::Minus, Sign::Zero)
-			| (Sign::Minus, Sign::Plus) => Self(Sign::Minus, d),
+
+			(Sign::Zero | Sign::Plus, Sign::Minus) | (Sign::Minus, Sign::Zero | Sign::Plus) => {
+				Self(Sign::Minus, d)
+			}
 		}
 	}
 }
