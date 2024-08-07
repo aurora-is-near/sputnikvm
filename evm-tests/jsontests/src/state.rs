@@ -89,6 +89,7 @@ impl Test {
 		let block_base_fee_per_gas = self.0.env.block_base_fee_per_gas.0;
 		let tx = &self.0.transaction;
 		// Validation for EIP-1559 that was introduced in London hard fork
+		// TODOFEE
 		let gas_price = if *spec >= ForkSpec::London {
 			tx.gas_price.or(tx.max_fee_per_gas).unwrap_or_default().0
 		} else {
@@ -1212,6 +1213,19 @@ fn test_run(
 				} else {
 					actual_fee
 				};
+				// TODOFEE
+				// gas_price = tx.gas_price.or(tx.max_fee_per_gas)
+				// if tx.max_priority_fee_per_gas.is_some:
+				//     if tx.max_priority_fee_per_gas > gas_price:
+				// 	       return PriorityFeeTooLarge
+				// effective_gas_price =
+				//     if tx.max_priority_fee_per_gas.is_some:
+				//         min(gas_price, tx.max_priority_fee_per_gas + block_base_fee_per_gas)
+				//     else:
+				//         gas_price
+				// total_fee = effective_gas_price * gas_limit + data_fee
+				// miner_reward = gas_used * (effective_gas_price - block_base_fee_per_gas)
+				// refund_to_caller = total_fee - gas_used * effective_gas_price - data_fee
 
 				executor
 					.state_mut()
