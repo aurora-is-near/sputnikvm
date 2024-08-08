@@ -8,10 +8,6 @@ repository.workspace = true
 keywords.workspace = true
 edition.workspace = true
 
-[lints]
-clippy.pedantic = "deny"
-clippy.nursery = "deny"
-
 [workspace.dependencies]
 evm = { version = "0.46.0", path = "." }
 evm-core = { version = "0.46.0", path = "core", default-features = false }

@@ -99,6 +99,8 @@ impl<'config> StackSubstateMetadata<'config> {
 		}
 	}
 
+	/// # Errors
+	/// Return `ExitError`
 	pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
 		self.gasometer.record_stipend(other.gasometer.gas())?;
 		self.gasometer
@@ -118,12 +120,16 @@ impl<'config> StackSubstateMetadata<'config> {
 		Ok(())
 	}
 
+	/// # Errors
+	/// Return `ExitError`
 	pub fn swallow_revert(&mut self, other: &Self) -> Result<(), ExitError> {
 		self.gasometer.record_stipend(other.gasometer.gas())?;
 
 		Ok(())
 	}
 
+	/// # Errors
+	/// Return `ExitError`
 	pub const fn swallow_discard(&self, _other: &Self) -> Result<(), ExitError> {
 		Ok(())
 	}
@@ -200,8 +206,14 @@ pub trait StackState<'config>: Backend {
 	fn metadata_mut(&mut self) -> &mut StackSubstateMetadata<'config>;
 
 	fn enter(&mut self, gas_limit: u64, is_static: bool);
+	/// # Errors
+	/// Return `ExitError`
 	fn exit_commit(&mut self) -> Result<(), ExitError>;
+	/// # Errors
+	/// Return `ExitError`
 	fn exit_revert(&mut self) -> Result<(), ExitError>;
+	/// # Errors
+	/// Return `ExitError`
 	fn exit_discard(&mut self) -> Result<(), ExitError>;
 
 	fn is_empty(&self, address: H160) -> bool;
@@ -210,6 +222,8 @@ pub trait StackState<'config>: Backend {
 	fn is_cold(&self, address: H160) -> bool;
 	fn is_storage_cold(&self, address: H160, key: H256) -> bool;
 
+	/// # Errors
+	/// Return `ExitError`
 	fn inc_nonce(&mut self, address: H160) -> Result<(), ExitError>;
 	fn set_storage(&mut self, address: H160, key: H256, value: H256);
 	fn reset_storage(&mut self, address: H160);
@@ -217,6 +231,8 @@ pub trait StackState<'config>: Backend {
 	fn set_deleted(&mut self, address: H160);
 	fn set_created(&mut self, address: H160);
 	fn set_code(&mut self, address: H160, code: Vec<u8>);
+	/// # Errors
+	/// Return `ExitError`
 	fn transfer(&mut self, transfer: Transfer) -> Result<(), ExitError>;
 	fn reset_balance(&mut self, address: H160);
 	fn touch(&mut self, address: H160);
@@ -237,6 +253,8 @@ pub trait StackState<'config>: Backend {
 		H256::from_slice(Keccak256::digest(self.code(address)).as_slice())
 	}
 
+	/// # Errors
+	/// Return `ExitError`
 	fn record_external_operation(
 		&mut self,
 		#[allow(clippy::used_underscore_binding)] _op: crate::ExternalOperation,
@@ -244,6 +262,8 @@ pub trait StackState<'config>: Backend {
 		Ok(())
 	}
 
+	/// # Errors
+	/// Return `ExitError`
 	fn record_external_dynamic_opcode_cost(
 		&mut self,
 		#[allow(clippy::used_underscore_binding)] _opcode: Opcode,
@@ -253,6 +273,8 @@ pub trait StackState<'config>: Backend {
 		Ok(())
 	}
 
+	/// # Errors
+	/// Return `ExitError`
 	fn record_external_cost(
 		&mut self,
 		#[allow(clippy::used_underscore_binding)] _ref_time: Option<u64>,
@@ -271,13 +293,19 @@ pub trait StackState<'config>: Backend {
 
 	/// Set tstorage value of address at index.
 	/// EIP-1153: Transient storage
+	///
+	/// # Errors
+	/// Return `ExitError`
 	fn tstore(&mut self, address: H160, index: H256, value: U256) -> Result<(), ExitError>;
 	/// Get tstorage value of address at index.
 	/// EIP-1153: Transient storage
+	///
+	/// # Errors
+	/// Return `ExitError`
 	fn tload(&mut self, address: H160, index: H256) -> Result<U256, ExitError>;
 }
 
-/// Stack-based executor.
+/// Stack-based executor.\
 pub struct StackExecutor<'config, 'precompiles, S, P> {
 	config: &'config Config,
 	state: S,
@@ -329,6 +357,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	}
 
 	/// Exit a substate. Panic if it results an empty substate stack.
+	///
+	/// # Errors
+	/// Return `ExitError`
 	pub fn exit_substate(&mut self, kind: &StackExitKind) -> Result<(), ExitError> {
 		match kind {
 			StackExitKind::Succeeded => self.state.exit_commit(),

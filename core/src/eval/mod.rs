@@ -27,6 +27,7 @@ pub fn eval<H: InterpreterHandler>(
 }
 
 // Table-based interpreter, shows the smallest gas cost.
+#[allow(clippy::too_many_lines)]
 #[inline]
 fn eval_table<H: InterpreterHandler>(
 	state: &mut Machine,

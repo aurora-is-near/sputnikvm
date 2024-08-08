@@ -290,6 +290,7 @@ impl Opcode {
 }
 
 impl Display for Opcode {
+	#[allow(clippy::too_many_lines)]
 	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
 		let name = match *self {
 			Self::STOP => "STOP",

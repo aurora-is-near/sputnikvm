@@ -41,13 +41,9 @@ impl Ord for I256 {
 	fn cmp(&self, other: &Self) -> Ordering {
 		match (self.0, other.0) {
 			(Sign::Zero, Sign::Zero) => Ordering::Equal,
-			(Sign::Zero, Sign::Plus) => Ordering::Less,
-			(Sign::Zero, Sign::Minus) => Ordering::Greater,
-			(Sign::Minus, Sign::Zero) => Ordering::Less,
-			(Sign::Minus, Sign::Plus) => Ordering::Less,
+			(Sign::Zero | Sign::Minus, Sign::Plus) | (Sign::Minus, Sign::Zero) => Ordering::Less,
 			(Sign::Minus, Sign::Minus) => self.1.cmp(&other.1).reverse(),
-			(Sign::Plus, Sign::Minus) => Ordering::Greater,
-			(Sign::Plus, Sign::Zero) => Ordering::Greater,
+			(Sign::Zero | Sign::Plus, Sign::Minus) | (Sign::Plus, Sign::Zero) => Ordering::Greater,
 			(Sign::Plus, Sign::Plus) => self.1.cmp(&other.1),
 		}
 	}
@@ -109,9 +105,9 @@ impl Div for I256 {
 		}
 
 		match (self.0, other.0) {
-			(Sign::Zero | Sign::Plus, Sign::Plus)
-			| (Sign::Plus | Sign::Zero, Sign::Zero)
-			| (Sign::Minus, Sign::Minus) => Self(Sign::Plus, d),
+			(Sign::Zero | Sign::Plus, Sign::Plus | Sign::Zero) | (Sign::Minus, Sign::Minus) => {
+				Self(Sign::Plus, d)
+			}
 
 			(Sign::Zero | Sign::Plus, Sign::Minus) | (Sign::Minus, Sign::Zero | Sign::Plus) => {
 				Self(Sign::Minus, d)

@@ -148,6 +148,9 @@ impl<'config> MemoryStackSubstate<'config> {
 
 	/// # Panics
 	/// Cannot commit on root substate"
+	///
+	/// # Errors
+	/// Return `ExitError`
 	pub fn exit_commit(&mut self) -> Result<(), ExitError> {
 		let mut exited = *self.parent.take().expect("Cannot commit on root substate");
 		mem::swap(&mut exited, self);
@@ -182,6 +185,9 @@ impl<'config> MemoryStackSubstate<'config> {
 
 	/// # Panics
 	/// Cannot discard on root substate
+	///
+	/// # Errors
+	/// Return `ExitError`
 	pub fn exit_revert(&mut self) -> Result<(), ExitError> {
 		let mut exited = *self.parent.take().expect("Cannot discard on root substate");
 		mem::swap(&mut exited, self);
@@ -193,6 +199,9 @@ impl<'config> MemoryStackSubstate<'config> {
 
 	/// # Panics
 	/// Cannot discard on root substate
+	///
+	/// # Errors
+	/// Return `ExitError`
 	pub fn exit_discard(&mut self) -> Result<(), ExitError> {
 		let mut exited = *self.parent.take().expect("Cannot discard on root substate");
 		mem::swap(&mut exited, self);
@@ -336,6 +345,8 @@ impl<'config> MemoryStackSubstate<'config> {
 			.expect("New account was just inserted")
 	}
 
+	/// # Errors
+	/// Return `ExitError`
 	pub fn inc_nonce<B: Backend>(&mut self, address: H160, backend: &B) -> Result<(), ExitError> {
 		let nonce = &mut self.account_mut(address, backend).basic.nonce;
 		if *nonce >= U64_MAX {
@@ -397,6 +408,8 @@ impl<'config> MemoryStackSubstate<'config> {
 		self.account_mut(address, backend).code = Some(code);
 	}
 
+	/// # Errors
+	/// Return `ExitError`
 	pub fn transfer<B: Backend>(
 		&mut self,
 		transfer: &Transfer,
@@ -418,7 +431,9 @@ impl<'config> MemoryStackSubstate<'config> {
 		Ok(())
 	}
 
-	// Only needed for jsontests.
+	/// Only needed for jsontests.
+	/// # Errors
+	/// Return `ExitError`
 	pub fn withdraw<B: Backend>(
 		&mut self,
 		address: H160,
@@ -676,6 +691,8 @@ impl<'backend, 'config, B: Backend> MemoryStackState<'backend, 'config, B> {
 		self.substate.deconstruct(self.backend)
 	}
 
+	/// # Errors
+	/// Return `ExitError`
 	pub fn withdraw(&mut self, address: H160, value: U256) -> Result<(), ExitError> {
 		self.substate.withdraw(address, value, self.backend)
 	}

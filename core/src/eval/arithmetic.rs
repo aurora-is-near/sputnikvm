@@ -142,7 +142,7 @@ mod tests {
 			U256::MAX,
 		];
 		for x in 0..64 {
-			for y in test_values.iter() {
+			for y in &test_values {
 				compare_old_signextend(x.into(), *y);
 			}
 		}
