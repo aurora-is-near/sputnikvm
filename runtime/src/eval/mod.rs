@@ -112,18 +112,26 @@ pub fn finish_call(
 
 	match reason {
 		ExitReason::Succeed(_) => {
-			if runtime.machine.memory_mut().copy_large(
-				out_offset,
-				U256::zero(),
-				target_len,
-				&runtime.return_data_buffer[..],
-			) == Ok(())
+			let value_to_push = if runtime
+				.machine
+				.memory_mut()
+				.copy_large(
+					out_offset,
+					U256::zero(),
+					target_len,
+					&runtime.return_data_buffer[..],
+				)
+				.is_ok()
 			{
-				runtime.machine.stack_mut().push(U256::one())?;
+				U256::one()
 			} else {
-				runtime.machine.stack_mut().push(U256::zero())?;
-			}
-			Ok(())
+				U256::zero()
+			};
+			runtime
+				.machine
+				.stack_mut()
+				.push(value_to_push)
+				.map_err(Into::into)
 		}
 		ExitReason::Revert(_) => {
 			runtime.machine.stack_mut().push(U256::zero())?;

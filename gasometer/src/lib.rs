@@ -2,7 +2,7 @@
 
 #![deny(warnings)]
 #![forbid(unsafe_code, unused_variables)]
-// #![deny(clippy::pedantic, clippy::nursery)]
+#![deny(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::module_name_repetitions)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -83,8 +83,9 @@ pub struct Snapshot {
 
 #[cfg(feature = "tracing")]
 impl Snapshot {
-	fn new<'config>(gas_limit: u64, inner: &'config Inner<'config>) -> Snapshot {
-		Snapshot {
+	#[must_use]
+	const fn new<'config>(gas_limit: u64, inner: &'config Inner<'config>) -> Self {
+		Self {
 			gas_limit,
 			memory_gas: inner.memory_gas,
 			used_gas: inner.used_gas,
@@ -224,7 +225,7 @@ impl<'config> Gasometer<'config> {
 	/// Return `ExitError`
 	#[inline]
 	pub fn record_deposit(&mut self, len: usize) -> Result<(), ExitError> {
-		let cost = len as u64 * (consts::G_CODEDEPOSIT as u64);
+		let cost = len as u64 * u64::from(consts::G_CODEDEPOSIT);
 		self.record_cost(cost)
 	}
 
@@ -568,7 +569,8 @@ pub fn static_opcode_cost(opcode: Opcode) -> Option<u32> {
 #[allow(
 	clippy::nonminimal_bool,
 	clippy::cognitive_complexity,
-	clippy::too_many_lines
+	clippy::too_many_lines,
+	clippy::match_same_arms
 )]
 pub fn dynamic_opcode_cost<H: Handler>(
 	address: H160,
@@ -883,12 +885,10 @@ impl<'config> Inner<'config> {
 
 	fn extra_check(&self, cost: GasCost, after_gas: u64) -> Result<(), ExitError> {
 		match cost {
-			GasCost::Call { gas, .. } => costs::call_extra_check(gas, after_gas, self.config),
-			GasCost::CallCode { gas, .. } => costs::call_extra_check(gas, after_gas, self.config),
-			GasCost::DelegateCall { gas, .. } => {
-				costs::call_extra_check(gas, after_gas, self.config)
-			}
-			GasCost::StaticCall { gas, .. } => costs::call_extra_check(gas, after_gas, self.config),
+			GasCost::Call { gas, .. }
+			| GasCost::CallCode { gas, .. }
+			| GasCost::DelegateCall { gas, .. }
+			| GasCost::StaticCall { gas, .. } => costs::call_extra_check(gas, after_gas, self.config),
 			_ => Ok(()),
 		}
 	}
@@ -964,14 +964,14 @@ impl<'config> Inner<'config> {
 			GasCost::Log { n, len } => costs::log_cost(n, len)?,
 			GasCost::VeryLowCopy { len } => costs::verylowcopy_cost(len)?,
 			GasCost::Exp { power } => costs::exp_cost(power, self.config)?,
-			GasCost::Create => consts::G_CREATE as u64,
+			GasCost::Create => u64::from(consts::G_CREATE),
 			GasCost::Create2 { len } => costs::create2_cost(len)?,
 			GasCost::SLoad { target_is_cold } => costs::sload_cost(target_is_cold, self.config),
 
-			GasCost::Zero => consts::G_ZERO as u64,
-			GasCost::Base => consts::G_BASE as u64,
-			GasCost::VeryLow => consts::G_VERYLOW as u64,
-			GasCost::Low => consts::G_LOW as u64,
+			GasCost::Zero => u64::from(consts::G_ZERO),
+			GasCost::Base => u64::from(consts::G_BASE),
+			GasCost::VeryLow => u64::from(consts::G_VERYLOW),
+			GasCost::Low => u64::from(consts::G_LOW),
 			GasCost::Invalid(opcode) => return Err(ExitError::InvalidCode(opcode)),
 
 			GasCost::ExtCodeSize { target_is_cold } => {
@@ -984,7 +984,7 @@ impl<'config> Inner<'config> {
 			GasCost::Balance { target_is_cold } => {
 				costs::address_access_cost(target_is_cold, self.config.gas_balance, self.config)
 			}
-			GasCost::BlockHash => consts::G_BLOCKHASH as u64,
+			GasCost::BlockHash => u64::from(consts::G_BLOCKHASH),
 			GasCost::ExtCodeHash { target_is_cold } => costs::address_access_cost(
 				target_is_cold,
 				self.config.gas_ext_code_hash,
