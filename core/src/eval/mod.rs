@@ -40,6 +40,7 @@ fn eval_table<H: InterpreterHandler>(
 			state.position = Ok(position + 1);
 			Control::Trap(opcode)
 		}
+		#[allow(clippy::as_conversions)]
 		let mut table = [eval_external as _; 256];
 		macro_rules! table_elem {
 			($operation:ident, $definition:expr) => {

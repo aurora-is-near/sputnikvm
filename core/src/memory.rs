@@ -217,6 +217,7 @@ impl Memory {
 			return Ok(());
 		}
 
+		#[allow(clippy::as_conversions)]
 		let data = data_offset
 			.checked_add(len.into())
 			.map_or(&[] as &[u8], |end| {

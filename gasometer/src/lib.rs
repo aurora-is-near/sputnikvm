@@ -3,6 +3,7 @@
 #![deny(warnings)]
 #![forbid(unsafe_code, unused_variables)]
 #![deny(clippy::pedantic, clippy::nursery)]
+#![deny(clippy::as_conversions)]
 #![allow(clippy::module_name_repetitions)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -221,8 +222,12 @@ impl<'config> Gasometer<'config> {
 
 	/// Record `CREATE` code deposit.
 	///
+	///
+	///
 	/// # Errors
 	/// Return `ExitError`
+	/// NOTE: in that context usize->u64 `as_conversions` is save
+	#[allow(clippy::as_conversions)]
 	#[inline]
 	pub fn record_deposit(&mut self, len: usize) -> Result<(), ExitError> {
 		let cost = len as u64 * u64::from(consts::G_CODEDEPOSIT);
@@ -306,6 +311,8 @@ impl<'config> Gasometer<'config> {
 	/// Return `ExitError`
 	pub fn record_transaction(&mut self, cost: TransactionCost) -> Result<(), ExitError> {
 		let gas_cost = match cost {
+			// NOTE: in that context usize->u64 `as_conversions` is save
+			#[allow(clippy::as_conversions)]
 			TransactionCost::Call {
 				zero_data_len,
 				non_zero_data_len,
@@ -332,6 +339,8 @@ impl<'config> Gasometer<'config> {
 
 				cost
 			}
+			// NOTE: in that context usize->u64 `as_conversions` is save
+			#[allow(clippy::as_conversions)]
 			TransactionCost::Create {
 				zero_data_len,
 				non_zero_data_len,
@@ -421,6 +430,9 @@ pub fn create_transaction_cost(data: &[u8], access_list: &[(H160, Vec<H256>)]) -
 	}
 }
 
+/// Init code cost, related to `EIP-3860`
+/// NOTE: in that context `as-conversion` is safe for `usize->u64`
+#[allow(clippy::as_conversions)]
 #[must_use]
 pub const fn init_code_cost(data: &[u8]) -> u64 {
 	// As per EIP-3860:

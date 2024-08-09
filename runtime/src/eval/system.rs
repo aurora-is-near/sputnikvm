@@ -376,7 +376,7 @@ pub fn log<H: Handler>(runtime: &mut Runtime, n: u8, handler: &mut H) -> Control
 	};
 
 	let mut topics = Vec::new();
-	for _ in 0..(n as usize) {
+	for _ in 0..n {
 		match runtime.machine.stack_mut().pop_h256() {
 			Ok(value) => {
 				topics.push(value);

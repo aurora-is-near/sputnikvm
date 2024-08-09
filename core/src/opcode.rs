@@ -284,6 +284,7 @@ impl Opcode {
 
 	#[inline]
 	#[must_use]
+	#[allow(clippy::as_conversions)]
 	pub const fn as_usize(&self) -> usize {
 		self.0 as usize
 	}

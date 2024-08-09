@@ -12,11 +12,11 @@ pub fn call_extra_check(gas: U256, after_gas: u64, config: &Config) -> Result<()
 	}
 }
 
-pub const fn suicide_refund(already_removed: bool) -> i64 {
+pub fn suicide_refund(already_removed: bool) -> i64 {
 	if already_removed {
 		0
 	} else {
-		consts::R_SUICIDE as i64
+		i64::from(consts::R_SUICIDE)
 	}
 }
 
@@ -287,15 +287,15 @@ pub const fn address_access_cost(is_cold: bool, regular_value: u64, config: &Con
 	}
 }
 
-const fn xfer_cost(is_call_or_callcode: bool, transfers_value: bool) -> u64 {
+fn xfer_cost(is_call_or_callcode: bool, transfers_value: bool) -> u64 {
 	if is_call_or_callcode && transfers_value {
-		consts::G_CALLVALUE as u64
+		u64::from(consts::G_CALLVALUE)
 	} else {
 		0
 	}
 }
 
-const fn new_cost(
+fn new_cost(
 	is_call_or_staticcall: bool,
 	new_account: bool,
 	transfers_value: bool,
@@ -305,12 +305,12 @@ const fn new_cost(
 	if is_call_or_staticcall {
 		if eip161 {
 			if transfers_value && new_account {
-				consts::G_NEWACCOUNT as u64
+				u64::from(consts::G_NEWACCOUNT)
 			} else {
 				0
 			}
 		} else if new_account {
-			consts::G_NEWACCOUNT as u64
+			u64::from(consts::G_NEWACCOUNT)
 		} else {
 			0
 		}

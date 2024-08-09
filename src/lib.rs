@@ -3,6 +3,7 @@
 #![deny(warnings)]
 #![forbid(unsafe_code, unused_variables)]
 #![deny(clippy::pedantic, clippy::nursery)]
+#![deny(clippy::as_conversions)]
 #![allow(clippy::module_name_repetitions)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
