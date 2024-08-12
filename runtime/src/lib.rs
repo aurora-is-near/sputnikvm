@@ -465,7 +465,7 @@ impl Config {
 
 		// See https://eips.ethereum.org/EIPS/eip-3529
 		let refund_sstore_clears = if decrease_clears_refund {
-			// Avoid signed casting to unsigned as it'll overflow
+			// Avoid unsigned casting to signed as it may overflow
 			i64::try_from(gas_sstore_reset + gas_access_list_storage_key).unwrap_or(i64::MAX)
 		} else {
 			15000

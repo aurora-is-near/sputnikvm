@@ -305,7 +305,7 @@ pub trait StackState<'config>: Backend {
 	fn tload(&mut self, address: H160, index: H256) -> Result<U256, ExitError>;
 }
 
-/// Stack-based executor.\
+/// Stack-based executor.
 pub struct StackExecutor<'config, 'precompiles, S, P> {
 	config: &'config Config,
 	state: S,
