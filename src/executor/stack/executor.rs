@@ -476,7 +476,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		init_code: &[u8],
 		access_list: &[(H160, Vec<H256>)],
 	) -> Result<(), ExitError> {
-		let transaction_cost = gasometer::create_transaction_zcost(init_code, access_list);
+		let transaction_cost = gasometer::create_transaction_cost(init_code, access_list);
 		let gasometer = &mut self.state.metadata_mut().gasometer;
 		gasometer.record_transaction(transaction_cost)
 	}

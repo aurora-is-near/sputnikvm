@@ -441,15 +441,6 @@ impl Config {
 		Self::config_with_derived_values(DerivedConfigInputs::cancun())
 	}
 
-<<<<<<< Updated upstream
-=======
-	/// Prague hard fork configuration.
-	#[must_use]
-	pub const fn prague() -> Self {
-		Self::config_with_derived_values(DerivedConfigInputs::prague())
-	}
-
->>>>>>> Stashed changes
 	const fn config_with_derived_values(inputs: DerivedConfigInputs) -> Self {
 		let DerivedConfigInputs {
 			gas_storage_read_warm,
