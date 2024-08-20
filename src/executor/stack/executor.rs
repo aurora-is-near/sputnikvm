@@ -360,10 +360,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		self.state.enter(gas_limit, is_static);
 	}
 
-	/// Exit a substate. Panic if it results an empty `substate` stack.
+	/// Exit a substate.
 	///
 	/// # Panics
-	/// Panic if it results an empty `substate` stack.
+	/// Panic occurs if a result is an empty `substate` stack.
 	///
 	/// # Errors
 	/// Return `ExitError`

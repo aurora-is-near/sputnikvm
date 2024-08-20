@@ -192,7 +192,7 @@ impl<'config> MemoryStackSubstate<'config> {
 		Ok(())
 	}
 
-	/// Exit revert represent revert execution of the `substate`.
+	/// Exit revert. Represents revert execution of the `substate`.
 	///
 	/// # Errors
 	/// Return `ExitError`
@@ -206,7 +206,7 @@ impl<'config> MemoryStackSubstate<'config> {
 		Ok(())
 	}
 
-	/// Exit discard represent discard execution of the `substate`.
+	/// Exit discard. Represents discard execution of the `substate`.
 	///
 	/// # Errors
 	/// Return `ExitError`. At the momoet it's not throwing any real error.
