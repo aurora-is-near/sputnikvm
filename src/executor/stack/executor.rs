@@ -1085,11 +1085,14 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		reason: ExitReason,
 		return_data: Vec<u8>,
 	) -> (ExitReason, Option<H160>, Vec<u8>) {
-		fn check_first_byte(config: &Config, code: &[u8]) -> Result<(), ExitError> {
-			if config.disallow_executable_format && Some(&Opcode::EOFMAGIC.as_u8()) == code.first()
-			{
-				return Err(ExitError::InvalidCode(Opcode::EOFMAGIC));
-			}
+		#[allow(clippy::unnecessary_wraps)]
+		const fn check_first_byte(_config: &Config, _code: &[u8]) -> Result<(), ExitError> {
+			// EIP-3541
+			// TODO: fix it according to requirements of EIP-3541
+			// if config.disallow_executable_format && Some(&Opcode::EOFMAGIC.as_u8()) == code.first()
+			// {
+			// 	return Err(ExitError::InvalidCode(Opcode::EOFMAGIC));
+			// }
 			Ok(())
 		}
 
