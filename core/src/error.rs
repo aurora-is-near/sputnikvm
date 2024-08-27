@@ -161,13 +161,15 @@ pub enum ExitError {
 	Other(Cow<'static, str>),
 
 	/// Nonce reached maximum value of 2^64-1
-	/// https://eips.ethereum.org/EIPS/eip-2681
+	/// <https://eips.ethereum.org/EIPS/eip-2681>
 	#[cfg_attr(feature = "with-codec", codec(index = 14))]
 	MaxNonce,
 
 	/// `usize` casting overflow
 	#[cfg_attr(feature = "with-codec", codec(index = 15))]
 	UsizeOverflow,
+	#[cfg_attr(feature = "with-codec", codec(index = 16))]
+	CreateContractStartingWithEF,
 }
 
 impl From<ExitError> for ExitReason {

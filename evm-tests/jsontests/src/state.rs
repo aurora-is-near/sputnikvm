@@ -228,6 +228,7 @@ impl JsonPrecompile {
 				precompile_entry!(map, CANCUN_BUILTINS, 0xA);
 				Some(map)
 			}
+			ForkSpec::Prague => Self::precompile(&ForkSpec::Cancun),
 			_ => None,
 		}
 	}
@@ -1178,6 +1179,7 @@ fn test_run(
 								data,
 								gas_limit,
 								access_list,
+								&[],
 							);
 							assert_call_exit_exception(&state.expect_exception);
 						}
@@ -1191,6 +1193,7 @@ fn test_run(
 								code,
 								gas_limit,
 								access_list,
+								&[],
 							);
 							if check_create_exit_reason(
 								&reason.0,

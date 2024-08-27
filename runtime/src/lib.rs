@@ -2,6 +2,8 @@
 
 #![deny(warnings)]
 #![forbid(unsafe_code, unused_variables)]
+#![deny(clippy::pedantic, clippy::nursery)]
+#![deny(clippy::as_conversions)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(feature = "std"))]
@@ -95,6 +97,7 @@ pub struct Runtime {
 
 impl Runtime {
 	/// Create a new runtime with given code and data.
+	#[must_use]
 	pub fn new(
 		code: Rc<Vec<u8>>,
 		data: Rc<Vec<u8>>,
@@ -113,16 +116,21 @@ impl Runtime {
 	}
 
 	/// Get a reference to the machine.
+	#[must_use]
 	pub const fn machine(&self) -> &Machine {
 		&self.machine
 	}
 
 	/// Get a reference to the execution context.
+	#[must_use]
 	pub const fn context(&self) -> &Context {
 		&self.context
 	}
 
 	/// Step the runtime.
+	///
+	/// # Errors
+	/// Return `ExitReason`, `Resolve`
 	pub fn step<H: Handler + InterpreterHandler>(
 		&mut self,
 		handler: &mut H,
@@ -136,10 +144,12 @@ impl Runtime {
 		handler: &mut H,
 	) -> Capture<ExitReason, Resolve<H>> {
 		loop {
-			step!(self, handler, return;)
+			step!(self, handler, return;);
 		}
 	}
 
+	/// # Errors
+	/// Return `ExitReason`
 	pub fn finish_create(
 		&mut self,
 		reason: ExitReason,
@@ -149,6 +159,8 @@ impl Runtime {
 		eval::finish_create(self, reason, address, return_data)
 	}
 
+	/// # Errors
+	/// Return `ExitReason`
 	pub fn finish_call(
 		&mut self,
 		reason: ExitReason,
@@ -165,6 +177,7 @@ impl Runtime {
 }
 
 /// Runtime configuration.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug)]
 pub struct Config {
 	/// Gas paid for extcode.
@@ -239,7 +252,7 @@ pub struct Config {
 	pub call_stack_limit: usize,
 	/// Create contract limit.
 	pub create_contract_limit: Option<usize>,
-	/// EIP-3860, maximum size limit of init_code.
+	/// EIP-3860, maximum size limit of `init_code`.
 	pub max_initcode_size: Option<usize>,
 	/// Call stipend.
 	pub call_stipend: u64,
@@ -281,6 +294,7 @@ pub struct Config {
 
 impl Config {
 	/// Frontier hard fork configuration.
+	#[must_use]
 	pub const fn frontier() -> Self {
 		Self {
 			gas_ext_code: 20,
@@ -341,6 +355,7 @@ impl Config {
 	}
 
 	/// Istanbul hard fork configuration.
+	#[must_use]
 	pub const fn istanbul() -> Self {
 		Self {
 			gas_ext_code: 700,
@@ -401,31 +416,37 @@ impl Config {
 	}
 
 	/// Berlin hard fork configuration.
+	#[must_use]
 	pub const fn berlin() -> Self {
 		Self::config_with_derived_values(DerivedConfigInputs::berlin())
 	}
 
 	/// london hard fork configuration.
+	#[must_use]
 	pub const fn london() -> Self {
 		Self::config_with_derived_values(DerivedConfigInputs::london())
 	}
 
 	/// The Merge (Paris) hard fork configuration.
+	#[must_use]
 	pub const fn merge() -> Self {
 		Self::config_with_derived_values(DerivedConfigInputs::merge())
 	}
 
 	/// Shanghai hard fork configuration.
+	#[must_use]
 	pub const fn shanghai() -> Self {
 		Self::config_with_derived_values(DerivedConfigInputs::shanghai())
 	}
 
 	/// Cancun hard fork configuration.
+	#[must_use]
 	pub const fn cancun() -> Self {
 		Self::config_with_derived_values(DerivedConfigInputs::cancun())
 	}
 
 	/// Prague hard fork configuration.
+	#[must_use]
 	pub const fn prague() -> Self {
 		Self::config_with_derived_values(DerivedConfigInputs::prague())
 	}
@@ -453,6 +474,8 @@ impl Config {
 		let gas_sload = gas_storage_read_warm;
 		let gas_sstore_reset = 5000 - gas_sload_cold;
 
+		// In that particular case allow unsigned casting to signed as it can't be more than `i64::MAX`.
+		#[allow(clippy::as_conversions, clippy::cast_possible_wrap)]
 		// See https://eips.ethereum.org/EIPS/eip-3529
 		let refund_sstore_clears = if decrease_clears_refund {
 			(gas_sstore_reset + gas_access_list_storage_key) as i64
@@ -522,6 +545,8 @@ impl Config {
 
 /// Independent inputs that are used to derive other config values.
 /// See `Config::config_with_derived_values` implementation for details.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 struct DerivedConfigInputs {
 	gas_storage_read_warm: u64,
 	gas_sload_cold: u64,
