@@ -235,6 +235,38 @@ impl Opcode {
 	pub const LOG3: Opcode = Opcode(0xa3);
 	pub const LOG4: Opcode = Opcode(0xa4);
 
+	pub const DATALOAD: Opcode = Opcode(0xd0);
+	pub const DATALOADN: Opcode = Opcode(0xd1);
+	pub const DATASIZE: Opcode = Opcode(0xd2);
+	pub const DATACOPY: Opcode = Opcode(0xd3);
+
+	/// `RJUMP` relative jump (EIP-4200)
+	pub const RJUMP: Opcode = Opcode(0xe0);
+	/// `RJUMPI` conditional relative jump (EIP-4200)
+	pub const RJUMPI: Opcode = Opcode(0xe1);
+	/// `RJUMPV` relative jump with  via jump table (EIP-4200)
+	pub const RJUMPV: Opcode = Opcode(0xe2);
+
+	/// `CALLF` call a function (EIP-4750)
+	pub const CALLF: Opcode = Opcode(0xe3);
+	/// `RETF` return from a function (EIP-4750)
+	pub const RETF: Opcode = Opcode(0xe4);
+
+	/// `JUMPF`  jumps to a code section without adding a new return stack frame (EIP-6206)
+	pub const JUMPF: Opcode = Opcode(0xe5);
+
+	/// `DUPN` EIP-663
+	pub const DUPN: Opcode = Opcode(0xe6);
+	/// `SWAPN` EIP-663
+	pub const SWAPN: Opcode = Opcode(0xe7);
+	/// `EXCHANGE` EIP-663
+	pub const EXCHANGE: Opcode = Opcode(0xe8);
+
+	/// `EOFCREATE` EIP-7620
+	pub const EOFCREATE: Opcode = Opcode(0xec);
+	/// `RETURNCONTRACT` EIP-7620
+	pub const RETURNCONTRACT: Opcode = Opcode(0xee);
+
 	/// `CREATE`
 	pub const CREATE: Opcode = Opcode(0xf0);
 	/// `CALL`
