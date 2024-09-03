@@ -45,11 +45,41 @@ pub enum StackExitKind {
 	Failed,
 }
 
+/// `Authorization` contains already prepared data for EIP-7702.
+/// - `authority`is `ecrecovered` authority address.
+/// - `address` is delegation destination address.
+/// - `nonce` is the `nonce` value which `authority.nonce` should be equal.
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct Authorization {
-	pub chain_id: U256,
-	pub nonce: u64,
+	pub authority: H160,
 	pub address: H160,
+	pub nonce: u64,
+}
+
+impl Authorization {
+	/// Create a new `Authorization` with given `authority`, `address`, and `nonce`.
+	pub const fn new(authority: H160, address: H160, nonce: u64) -> Self {
+		Self {
+			authority,
+			address,
+			nonce,
+		}
+	}
+
+	/// Returns `true` if `authority` is delegated to `address`.
+	/// `0xef0100 ++ address`, and it is always 23 bytes.
+	pub fn is_delegated(code: &[u8]) -> bool {
+		code.len() == 23 && code.starts_with(&[0xEF, 0x01, 0x00])
+	}
+
+	/// Returns the delegation code as composing: `0xef0100 ++ address`.
+	/// Result code is always 23 bytes.
+	pub fn delegation_code(&self) -> Vec<u8> {
+		let mut code = Vec::with_capacity(23);
+		code.extend(&[0xEF, 0x01, 0x00]);
+		code.extend(self.address.as_bytes());
+		code
+	}
 }
 
 #[derive(Default, Clone, Debug)]
@@ -511,8 +541,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		value: U256,
 		init_code: Vec<u8>,
 		gas_limit: u64,
-		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
-		authorization_list: &[Authorization],
+		access_list: Vec<(H160, Vec<H256>)>,    // See EIP-2930
+		authorization_list: Vec<Authorization>, // See EIP-7702
 	) -> (ExitReason, Vec<u8>) {
 		if self.nonce(caller) >= U64_MAX {
 			return (ExitError::MaxNonce.into(), Vec::new());
@@ -541,7 +571,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		self.warm_addresses_and_storage(caller, address, access_list);
 		// EIP-7702. authorized accounts
-		self.authorized_accounts(authorization_list);
+		if let Err(e) = self.authorized_accounts(authorization_list) {
+			return (e.into(), Vec::new());
+		}
 
 		match self.create_inner(
 			caller,
@@ -571,7 +603,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		init_code: Vec<u8>,
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
-		authorization_list: &[Authorization],
+		authorization_list: Vec<Authorization>,
 	) -> (ExitReason, Vec<u8>) {
 		let address = self.create_address(CreateScheme::Fixed(address));
 
@@ -619,7 +651,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		salt: H256,
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
-		authorization_list: &[Authorization],
+		authorization_list: Vec<Authorization>,
 	) -> (ExitReason, Vec<u8>) {
 		if let Some(limit) = self.config.max_initcode_size {
 			if init_code.len() > limit {
@@ -649,7 +681,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		self.warm_addresses_and_storage(caller, address, access_list);
 		// EIP-7702. authorized accounts
-		self.authorized_accounts(authorization_list);
+		if let Err(e) = self.authorized_accounts(authorization_list) {
+			return (e.into(), Vec::new());
+		}
 
 		match self.create_inner(
 			caller,
@@ -687,7 +721,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		data: Vec<u8>,
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>,
-		authorization_list: &[Authorization],
+		authorization_list: Vec<Authorization>,
 	) -> (ExitReason, Vec<u8>) {
 		event!(TransactCall {
 			caller,
@@ -710,7 +744,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		self.warm_addresses_and_storage(caller, address, access_list);
 		// EIP-7702. authorized accounts
-		self.authorized_accounts(authorization_list);
+		if let Err(e) = self.authorized_accounts(authorization_list) {
+			return (e.into(), Vec::new());
+		}
 
 		if let Err(e) = self.state.inc_nonce(caller) {
 			return (e.into(), Vec::new());
@@ -852,19 +888,53 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 	}
 
-	/// Authorized accounts
-	/// It meats `EIP-7702` requirements for authorized accounts:
-	/// - Validation of authorization list
-	/// - Validation authorization nonce
-	fn authorized_accounts(&self, authorization_list: &[Authorization]) {
+	/// Authorized accounts behavior.
+	///
+	/// According to `EIP-7702` behavior section should be several steps of verifications.
+	/// Current function includes steps 3-8 from the spec:
+	/// 3. Add `authority` to `accessed_addresses`
+	/// 4. Verify the code of `authority` is either empty or already delegated.
+	/// 5. Verify the `nonce` of `authority` is equal to `nonce` (of address).
+	/// 7. Set the code of `authority` to be `0xef0100 || address`. This is a delegation designation.
+	/// 8. Increase the `nonce` of `authority` by one.
+	///
+	/// It means, that steps 1-2 of spec must be passed before calling this function:
+	/// 1 Verify the chain id is either 0 or the chain’s current ID.
+	/// 2. `authority = ecrecover(...)`
+	///
+	/// See: [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702#behavior)
+	///
+	/// ## Errors
+	/// Return error if nonce increment return error.
+	fn authorized_accounts(
+		&mut self,
+		authorization_list: Vec<Authorization>,
+	) -> Result<(), ExitError> {
 		if !self.config.has_authorization_list {
-			return;
+			return Ok(());
 		}
-		#[allow(clippy::collection_is_never_read)]
-		let mut valid_auths = Vec::with_capacity(authorization_list.len());
-		for auth in authorization_list {
-			valid_auths.push(auth.address);
+
+		// 3. Add authority to accessed_addresses (as defined in EIP-2929)
+		let addresses = authorization_list.iter().map(|a| a.authority);
+		self.state.metadata_mut().access_addresses(addresses);
+
+		let state = self.state_mut();
+		for authority in authorization_list {
+			// 4. Verify the code of authority is either empty or already delegated.
+			let authority_code = state.code(authority.authority);
+			if !authority_code.is_empty() && !Authorization::is_delegated(&authority_code) {
+				continue;
+			}
+			// 5. Verify the nonce of authority is equal to nonce.
+			if state.basic(authority.authority).nonce != U256::from(authority.nonce) {
+				continue;
+			}
+			// 7. Set the code of authority to be `0xef0100 || address`. This is a delegation designation.
+			state.set_code(authority.authority, authority.delegation_code());
+			// 8. Increase the nonce of authority by one.
+			state.inc_nonce(authority.authority)?;
 		}
+		Ok(())
 	}
 
 	fn create_inner(

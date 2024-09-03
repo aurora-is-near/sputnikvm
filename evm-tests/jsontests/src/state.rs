@@ -1179,7 +1179,7 @@ fn test_run(
 								data,
 								gas_limit,
 								access_list,
-								&[],
+								Vec::new(),
 							);
 							assert_call_exit_exception(&state.expect_exception);
 						}
@@ -1193,7 +1193,7 @@ fn test_run(
 								code,
 								gas_limit,
 								access_list,
-								&[],
+								Vec::new(),
 							);
 							if check_create_exit_reason(
 								&reason.0,
