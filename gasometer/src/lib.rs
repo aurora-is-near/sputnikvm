@@ -470,7 +470,7 @@ pub fn static_opcode_cost(opcode: Opcode) -> Option<u32> {
 		table[Opcode::COINBASE.as_usize()] = Some(consts::G_BASE);
 		table[Opcode::TIMESTAMP.as_usize()] = Some(consts::G_BASE);
 		table[Opcode::NUMBER.as_usize()] = Some(consts::G_BASE);
-		table[Opcode::DIFFICULTY.as_usize()] = Some(consts::G_BASE);
+		table[Opcode::PREVRANDAO.as_usize()] = Some(consts::G_BASE);
 		table[Opcode::GASLIMIT.as_usize()] = Some(consts::G_BASE);
 		table[Opcode::GASPRICE.as_usize()] = Some(consts::G_BASE);
 		table[Opcode::GAS.as_usize()] = Some(consts::G_BASE);
@@ -761,7 +761,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		Opcode::CREATE2 if !is_static && config.has_create2 => GasCost::Create2 {
 			len: stack.peek(2)?,
 		},
-		Opcode::SUICIDE if !is_static => {
+		Opcode::SELFDESTRUCT if !is_static => {
 			let target = stack.peek_h256(0)?.into();
 			storage_target = StorageTarget::Address(target);
 			GasCost::Suicide {
