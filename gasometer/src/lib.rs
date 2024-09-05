@@ -220,9 +220,21 @@ impl<'config> Gasometer<'config> {
 		Ok(())
 	}
 
+	/// Record refund for `authority` - EIP-7702
+	/// `refunded_accounts` represent count of valid `authority`  accounts.
+	///
+	/// ## Errors
+	/// Return `ExitError` if `record_refund` operation fails.
+	pub fn record_authority_refund(&mut self, refunded_accounts: u64) -> Result<(), ExitError> {
+		let refund = i64::try_from(
+			refunded_accounts
+				* (self.config.gas_per_empty_account_cost - self.config.gas_per_auth_base_cost),
+		)
+		.unwrap_or(i64::MAX);
+		self.record_refund(refund)
+	}
+
 	/// Record `CREATE` code deposit.
-	///
-	///
 	///
 	/// # Errors
 	/// Return `ExitError`
@@ -311,7 +323,7 @@ impl<'config> Gasometer<'config> {
 	/// Return `ExitError`
 	pub fn record_transaction(&mut self, cost: TransactionCost) -> Result<(), ExitError> {
 		let gas_cost = match cost {
-			// NOTE: in that context usize->u64 `as_conversions` is save
+			// NOTE: in that context usize->u64 `as_conversions` is safe
 			#[allow(clippy::as_conversions)]
 			TransactionCost::Call {
 				zero_data_len,
@@ -339,7 +351,7 @@ impl<'config> Gasometer<'config> {
 
 				cost
 			}
-			// NOTE: in that context usize->u64 `as_conversions` is save
+			// NOTE: in that context usize->u64 `as_conversions` is safe
 			#[allow(clippy::as_conversions)]
 			TransactionCost::Create {
 				zero_data_len,

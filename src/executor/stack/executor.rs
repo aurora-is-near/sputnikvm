@@ -72,6 +72,17 @@ impl Authorization {
 		code.len() == 23 && code.starts_with(&[0xEF, 0x01, 0x00])
 	}
 
+	/// Get `authority` delegated `address`.
+	/// It checks, is it delegation designation (EIP-7702).
+	pub fn get_delegated_address(code: &[u8]) -> Option<H160> {
+		if Self::is_delegated(code) {
+			// `code` size is always 23 bytes.
+			Some(H160::from_slice(&code[3..]))
+		} else {
+			None
+		}
+	}
+
 	/// Returns the delegation code as composing: `0xef0100 ++ address`.
 	/// Result code is always 23 bytes.
 	pub fn delegation_code(&self) -> Vec<u8> {
@@ -913,6 +924,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		if !self.config.has_authorization_list {
 			return Ok(());
 		}
+		let mut refunded_accounts = 0;
 
 		// 3. Add authority to accessed_addresses (as defined in EIP-2929)
 		let addresses = authorization_list.iter().map(|a| a.authority);
@@ -929,12 +941,20 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			if state.basic(authority.authority).nonce != U256::from(authority.nonce) {
 				continue;
 			}
+
+			// 6. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter if authority exists in the trie.
+			if authority_code.is_empty() {
+				refunded_accounts += 1;
+			}
 			// 7. Set the code of authority to be `0xef0100 || address`. This is a delegation designation.
 			state.set_code(authority.authority, authority.delegation_code());
 			// 8. Increase the nonce of authority by one.
 			state.inc_nonce(authority.authority)?;
 		}
-		Ok(())
+		self.state
+			.metadata_mut()
+			.gasometer
+			.record_authority_refund(refunded_accounts)
 	}
 
 	fn create_inner(
@@ -1424,7 +1444,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 
 	/// Get account code
 	fn code(&self, address: H160) -> Vec<u8> {
-		self.state.code(address)
+		let code = self.state.code(address);
+		Authorization::get_delegated_address(&code)
+			.map_or(code, |delegated_address| self.state.code(delegated_address))
 	}
 
 	/// Get account storage by index
