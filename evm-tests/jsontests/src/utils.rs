@@ -360,10 +360,14 @@ pub mod transaction {
 			.map(|(a, s)| (a.0, s.iter().map(|h| h.0).collect()))
 			.collect();
 
+		// TODO: add authorization_list to TX
+		// let authorization_list_len = tx.authorization_list.len();
+		let authorization_list_len = 0;
+
 		let cost = if is_contract_creation {
-			gasometer::create_transaction_cost(data, &access_list)
+			gasometer::create_transaction_cost(data, &access_list, authorization_list_len)
 		} else {
-			gasometer::call_transaction_cost(data, &access_list)
+			gasometer::call_transaction_cost(data, &access_list, authorization_list_len)
 		};
 
 		let mut g = Gasometer::new(u64::MAX, config);

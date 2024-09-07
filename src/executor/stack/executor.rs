@@ -523,8 +523,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		&mut self,
 		init_code: &[u8],
 		access_list: &[(H160, Vec<H256>)],
+		authorization_list_len: usize,
 	) -> Result<(), ExitError> {
-		let transaction_cost = gasometer::create_transaction_cost(init_code, access_list);
+		let transaction_cost =
+			gasometer::create_transaction_cost(init_code, access_list, authorization_list_len);
 		let gasometer = &mut self.state.metadata_mut().gasometer;
 		gasometer.record_transaction(transaction_cost)
 	}
@@ -576,7 +578,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			}
 		}
 
-		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
+		if let Err(e) =
+			self.record_create_transaction_cost(&init_code, &access_list, authorization_list.len())
+		{
 			return emit_exit!(e.into(), Vec::new());
 		}
 
@@ -626,7 +630,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			address
 		});
 
-		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
+		if let Err(e) =
+			self.record_create_transaction_cost(&init_code, &access_list, authorization_list.len())
+		{
 			return emit_exit!(e.into(), Vec::new());
 		}
 
@@ -686,7 +692,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			address,
 		});
 
-		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
+		if let Err(e) =
+			self.record_create_transaction_cost(&init_code, &access_list, authorization_list.len())
+		{
 			return emit_exit!(e.into(), Vec::new());
 		}
 
@@ -746,7 +754,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return (ExitError::MaxNonce.into(), Vec::new());
 		}
 
-		let transaction_cost = gasometer::call_transaction_cost(&data, &access_list);
+		let transaction_cost =
+			gasometer::call_transaction_cost(&data, &access_list, authorization_list.len());
 		let gasometer = &mut self.state.metadata_mut().gasometer;
 		match gasometer.record_transaction(transaction_cost) {
 			Ok(()) => (),
