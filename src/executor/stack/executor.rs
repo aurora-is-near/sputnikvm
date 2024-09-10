@@ -1453,9 +1453,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 
 	/// Get account code
 	fn code(&self, address: H160) -> Vec<u8> {
-		let code = self.state.code(address);
-		Authorization::get_delegated_address(&code)
-			.map_or(code, |delegated_address| self.state.code(delegated_address))
+		self.state.code(address)
 	}
 
 	/// Get account storage by index
@@ -1726,6 +1724,14 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 			self.state.tload(address, index)
 		} else {
 			Err(ExitError::InvalidCode(Opcode::TLOAD))
+		}
+	}
+
+	fn authority_code(&mut self, code: &[u8]) -> Option<Vec<u8>> {
+		if self.config.has_authorization_list {
+			Authorization::get_delegated_address(code).map(|address| self.code(address))
+		} else {
+			None
 		}
 	}
 }
