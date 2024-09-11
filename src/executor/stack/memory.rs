@@ -1,5 +1,7 @@
 use crate::backend::{Apply, Backend, Basic, Log};
-use crate::executor::stack::executor::{Accessed, StackState, StackSubstateMetadata};
+use crate::executor::stack::executor::{
+	Accessed, Authorization, StackState, StackSubstateMetadata,
+};
 use crate::prelude::*;
 use crate::{ExitError, Transfer};
 use core::mem;
@@ -674,6 +676,10 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 	fn tstore(&mut self, address: H160, index: H256, value: U256) -> Result<(), ExitError> {
 		self.substate.set_tstorage(address, index, value);
 		Ok(())
+	}
+
+	fn authority_code(&mut self, code: &[u8]) -> Option<Vec<u8>> {
+		Authorization::get_delegated_address(code).map(|address| self.code(address))
 	}
 }
 

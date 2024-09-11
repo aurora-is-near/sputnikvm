@@ -293,16 +293,24 @@ pub trait StackState<'config>: Backend {
 	/// Provide a default implementation by fetching the code, but
 	/// can be customized to use a more performant approach that don't need to
 	/// fetch the code.
-	fn code_size(&self, address: H160) -> U256 {
-		U256::from(self.code(address).len())
+	///
+	/// According to EIP-7702, the code size of an address is the size of the
+	/// delegated address code size.
+	fn code_size(&mut self, address: H160) -> U256 {
+		let code = self.authority_code(&self.code(address)).unwrap_or_default();
+		U256::from(code.len())
 	}
 
 	/// Fetch the code hash of an address.
 	/// Provide a default implementation by fetching the code, but
 	/// can be customized to use a more performant approach that don't need to
 	/// fetch the code.
-	fn code_hash(&self, address: H160) -> H256 {
-		H256::from_slice(Keccak256::digest(self.code(address)).as_slice())
+	///
+	/// According to EIP-7702, the code hash of an address is the hash of the
+	/// delegated address code hash.
+	fn code_hash(&mut self, address: H160) -> H256 {
+		let code = self.authority_code(&self.code(address)).unwrap_or_default();
+		H256::from_slice(Keccak256::digest(code).as_slice())
 	}
 
 	/// # Errors
@@ -355,6 +363,9 @@ pub trait StackState<'config>: Backend {
 	/// # Errors
 	/// Return `ExitError`
 	fn tload(&mut self, address: H160, index: H256) -> Result<U256, ExitError>;
+
+	/// EIP-7702 - get delegated address from authority code.
+	fn authority_code(&mut self, code: &[u8]) -> Option<Vec<u8>>;
 }
 
 /// Stack-based executor.
@@ -829,7 +840,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	/// Check if the existing account is "create collision".    
 	/// [EIP-7610](https://eips.ethereum.org/EIPS/eip-7610)
 	pub fn is_create_collision(&self, address: H160) -> bool {
-		self.code_size(address) != U256::zero()
+		!self.code(address).is_empty()
 			|| self.nonce(address) > U256::zero()
 			|| !self.state.is_empty_storage(address)
 	}
@@ -1438,12 +1449,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	}
 
 	/// Get account code size
-	fn code_size(&self, address: H160) -> U256 {
+	fn code_size(&mut self, address: H160) -> U256 {
 		self.state.code_size(address)
 	}
 
 	/// Get account code hash
-	fn code_hash(&self, address: H160) -> H256 {
+	fn code_hash(&mut self, address: H160) -> H256 {
 		if !self.exists(address) {
 			return H256::default();
 		}
@@ -1729,7 +1740,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 
 	fn authority_code(&mut self, code: &[u8]) -> Option<Vec<u8>> {
 		if self.config.has_authorization_list {
-			Authorization::get_delegated_address(code).map(|address| self.code(address))
+			self.state.authority_code(code)
 		} else {
 			None
 		}
