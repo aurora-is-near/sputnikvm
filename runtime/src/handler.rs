@@ -181,5 +181,5 @@ pub trait Handler {
 	/// When authority code is found, it should set delegated addres to `authority_access` array for
 	/// calculating additional gas cost. Gas must be charged for the authority address and
 	/// for delegated address, for detection is address warm or cold.
-	fn authority_code(&mut self, code: &[u8]) -> Option<Vec<u8>>;
+	fn authority_code(&mut self, authority: H160, code: &[u8]) -> Option<Vec<u8>>;
 }

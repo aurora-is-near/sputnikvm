@@ -97,6 +97,7 @@ impl Authorization {
 pub struct Accessed {
 	pub accessed_addresses: BTreeSet<H160>,
 	pub accessed_storage: BTreeSet<(H160, H256)>,
+	pub authority: BTreeMap<H160, (H160, Vec<u8>)>,
 }
 
 impl Accessed {
@@ -118,6 +119,23 @@ impl Accessed {
 		for storage in storages {
 			self.accessed_storage.insert((storage.0, storage.1));
 		}
+	}
+
+	/// Add authority to the accessed authority list (EIP-7702).
+	pub fn add_authority(&mut self, authority: H160, address: H160, bytecode: Vec<u8>) {
+		self.authority.insert(authority, (address, bytecode));
+	}
+
+	/// Get authority from the accessed authority list (EIP-7702).
+	#[must_use]
+	pub fn get_authority(&self, authority: H160) -> Option<&(H160, Vec<u8>)> {
+		self.authority.get(&authority)
+	}
+
+	/// Check if authority is in the accessed authority list (EIP-7702).
+	#[must_use]
+	pub fn is_authority(&self, authority: H160) -> bool {
+		self.authority.contains_key(&authority)
 	}
 }
 
@@ -167,6 +185,9 @@ impl<'config> StackSubstateMetadata<'config> {
 			self_accessed
 				.accessed_storage
 				.append(&mut other_accessed.accessed_storage);
+			self_accessed
+				.authority
+				.append(&mut other_accessed.authority);
 		}
 
 		Ok(())
@@ -250,6 +271,13 @@ impl<'config> StackSubstateMetadata<'config> {
 	pub const fn accessed(&self) -> &Option<Accessed> {
 		&self.accessed
 	}
+
+	/// Add authority to accessed list (related to EIP-7702)
+	pub fn add_authority(&mut self, authority: H160, address: H160, code: Vec<u8>) {
+		if let Some(accessed) = &mut self.accessed {
+			accessed.add_authority(authority, address, code);
+		}
+	}
 }
 
 #[auto_impl::auto_impl(& mut, Box)]
@@ -297,7 +325,10 @@ pub trait StackState<'config>: Backend {
 	/// According to EIP-7702, the code size of an address is the size of the
 	/// delegated address code size.
 	fn code_size(&mut self, address: H160) -> U256 {
-		let code = self.authority_code(&self.code(address)).unwrap_or_default();
+		let code = self.code(address);
+		let code = self
+			.authority_code(address, &self.code(address))
+			.unwrap_or(code);
 		U256::from(code.len())
 	}
 
@@ -309,7 +340,8 @@ pub trait StackState<'config>: Backend {
 	/// According to EIP-7702, the code hash of an address is the hash of the
 	/// delegated address code hash.
 	fn code_hash(&mut self, address: H160) -> H256 {
-		let code = self.authority_code(&self.code(address)).unwrap_or_default();
+		let code = self.code(address);
+		let code = self.authority_code(address, &code).unwrap_or(code);
 		H256::from_slice(Keccak256::digest(code).as_slice())
 	}
 
@@ -365,7 +397,7 @@ pub trait StackState<'config>: Backend {
 	fn tload(&mut self, address: H160, index: H256) -> Result<U256, ExitError>;
 
 	/// EIP-7702 - get delegated address from authority code.
-	fn authority_code(&mut self, code: &[u8]) -> Option<Vec<u8>>;
+	fn authority_code(&mut self, authority: H160, code: &[u8]) -> Option<Vec<u8>>;
 }
 
 /// Stack-based executor.
@@ -970,6 +1002,15 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			state.set_code(authority.authority, authority.delegation_code());
 			// 8. Increase the nonce of authority by one.
 			state.inc_nonce(authority.authority)?;
+
+			// Special step - add to authority access list
+			// NOTE: it requires additionally reading code from delegated address. And it's additional Storage read operation.
+			let delegated_address_code = state.code(authority.address);
+			state.metadata_mut().add_authority(
+				authority.authority,
+				authority.address,
+				delegated_address_code,
+			);
 		}
 		self.state
 			.metadata_mut()
@@ -1161,6 +1202,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 
 		let code = self.code(code_address);
+		// EIP-7702 - get delegated designation address code
+		let code = self.authority_code(code_address, &code).unwrap_or(code);
 
 		self.enter_substate(gas_limit, is_static);
 		self.state.touch(context.address);
@@ -1738,9 +1781,17 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		}
 	}
 
-	fn authority_code(&mut self, code: &[u8]) -> Option<Vec<u8>> {
+	/// Get delegation designator ofr the authority code.
+	/// If the code of address is delegation designator, then retrieve code
+	/// from the designation address for the `authority`.
+	///
+	/// It's related to [EIP-7702 Delegation Designation](https://eips.ethereum.org/EIPS/eip-7702#delegation-designation)
+	/// When authority code is found, it should set delegated addres to `authority_access` array for
+	/// calculating additional gas cost. Gas must be charged for the authority address and
+	/// for delegated address, for detection is address warm or cold.
+	fn authority_code(&mut self, authority: H160, code: &[u8]) -> Option<Vec<u8>> {
 		if self.config.has_authorization_list {
-			self.state.authority_code(code)
+			self.state.authority_code(authority, code)
 		} else {
 			None
 		}

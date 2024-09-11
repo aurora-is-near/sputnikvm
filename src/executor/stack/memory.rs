@@ -610,7 +610,7 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 
 		self.backend.basic(address).balance == U256::zero()
 			&& self.backend.basic(address).nonce == U256::zero()
-			&& self.backend.code(address).len() == 0
+			&& self.backend.code(address).is_empty()
 	}
 
 	fn deleted(&self, address: H160) -> bool {
@@ -678,8 +678,30 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 		Ok(())
 	}
 
-	fn authority_code(&mut self, code: &[u8]) -> Option<Vec<u8>> {
-		Authorization::get_delegated_address(code).map(|address| self.code(address))
+	/// Get delegation designator ofr the authority code.
+	/// If the code of address is delegation designator, then retrieve code
+	/// from the designation address for the `authority`.
+	///
+	/// It's related to [EIP-7702 Delegation Designation](https://eips.ethereum.org/EIPS/eip-7702#delegation-designation)
+	/// When authority code is found, it should set delegated addres to `authority_access` array for
+	/// calculating additional gas cost. Gas must be charged for the authority address and
+	/// for delegated address, for detection is address warm or cold.
+	fn authority_code(&mut self, authority: H160, code: &[u8]) -> Option<Vec<u8>> {
+		// Get code data from the cache
+		if let Some(accessed) = self.metadata().accessed() {
+			if let Some((_, code)) = accessed.get_authority(authority) {
+				return Some(code.clone());
+			}
+		}
+		// Get code for delegated address
+		if let Some(target) = Authorization::get_delegated_address(code) {
+			let code = self.code(target);
+			// Add to cache
+			self.metadata_mut()
+				.add_authority(authority, target, code.clone());
+			return Some(code);
+		}
+		None
 	}
 }
 
