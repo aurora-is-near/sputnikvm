@@ -603,28 +603,74 @@ impl DerivedConfigInputs {
 	}
 
 	const fn london() -> Self {
-		let mut config = Self::berlin();
-		config.decrease_clears_refund = true;
-		config.has_base_fee = true;
-		config.disallow_executable_format = true;
-		config
+		Self {
+			gas_storage_read_warm: 100,
+			gas_sload_cold: 2100,
+			gas_access_list_storage_key: 1900,
+			decrease_clears_refund: true,
+			has_base_fee: true,
+			has_push0: false,
+			disallow_executable_format: true,
+			warm_coinbase_address: false,
+			max_initcode_size: None,
+			has_blob_base_fee: false,
+			has_shard_blob_transactions: false,
+			has_transient_storage: false,
+			has_mcopy: false,
+			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
+			gas_per_auth_base_cost: 0,
+			gas_per_empty_account_cost: 0,
+		}
 	}
 
 	const fn merge() -> Self {
-		Self::london()
+		Self {
+			gas_storage_read_warm: 100,
+			gas_sload_cold: 2100,
+			gas_access_list_storage_key: 1900,
+			decrease_clears_refund: true,
+			has_base_fee: true,
+			has_push0: false,
+			disallow_executable_format: true,
+			warm_coinbase_address: false,
+			max_initcode_size: None,
+			has_blob_base_fee: false,
+			has_shard_blob_transactions: false,
+			has_transient_storage: false,
+			has_mcopy: false,
+			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
+			gas_per_auth_base_cost: 0,
+			gas_per_empty_account_cost: 0,
+		}
 	}
 
 	const fn shanghai() -> Self {
-		let mut config = Self::merge();
-		config.has_push0 = true;
-		config.warm_coinbase_address = true;
-		// 2 * 24576 as per EIP-3860
-		config.max_initcode_size = Some(0xC000);
-		config
+		Self {
+			gas_storage_read_warm: 100,
+			gas_sload_cold: 2100,
+			gas_access_list_storage_key: 1900,
+			decrease_clears_refund: true,
+			has_base_fee: true,
+			has_push0: true,
+			disallow_executable_format: true,
+			warm_coinbase_address: true,
+			// 2 * 24576 as per EIP-3860
+			max_initcode_size: Some(0xC000),
+			has_blob_base_fee: false,
+			has_shard_blob_transactions: false,
+			has_transient_storage: false,
+			has_mcopy: false,
+			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
+			gas_per_auth_base_cost: 0,
+			gas_per_empty_account_cost: 0,
+		}
 	}
 
 	const fn cancun() -> Self {
-		let mut config = Self::merge();
+		let mut config = Self::shanghai();
 		config.has_blob_base_fee = true;
 		config.has_shard_blob_transactions = true;
 		config.has_transient_storage = true;
