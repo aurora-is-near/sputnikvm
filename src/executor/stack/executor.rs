@@ -1428,7 +1428,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 				.record_cost(u64::from(cost))?;
 		} else {
 			let is_static = self.state.metadata().is_static;
-			let (gas_cost, target, memory_cost) = gasometer::dynamic_opcode_cost(
+			let (gas_cost, targets, memory_cost) = gasometer::dynamic_opcode_cost(
 				*address,
 				opcode,
 				machine.stack(),
@@ -1441,14 +1441,17 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 				.metadata_mut()
 				.gasometer
 				.record_dynamic_cost(gas_cost, memory_cost)?;
-			match target {
-				StorageTarget::Address(address) => {
-					self.state.metadata_mut().access_address(address);
+			// Fetch targete and warm it
+			for target in targets {
+				match target {
+					StorageTarget::Address(address) => {
+						self.state.metadata_mut().access_address(address);
+					}
+					StorageTarget::Slot(address, key) => {
+						self.state.metadata_mut().access_storage(address, key);
+					}
+					StorageTarget::None => (),
 				}
-				StorageTarget::Slot(address, key) => {
-					self.state.metadata_mut().access_storage(address, key);
-				}
-				StorageTarget::None => (),
 			}
 		}
 		Ok(())
@@ -1559,6 +1562,23 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 			}
 			Some(index) => self.state.is_storage_cold(address, index),
 		})
+	}
+
+	/// Get authority delegated address and `is_cold` status
+	/// EIP-7702
+	fn is_authority_cold(&mut self, address: H160) -> Result<Option<bool>, ExitError> {
+		if let Some(accessed) = &self.state.metadata().accessed {
+			if let Some((target, _)) = accessed.get_authority(address) {
+				return Ok(Some(self.is_cold(*target, None)?));
+			}
+		}
+		Ok(None)
+	}
+
+	/// Return the target address of the authority delegation designation (EIP-7702).
+	fn authority_target(&self, address: H160) -> Option<H160> {
+		let accessed = self.state.metadata().accessed.as_ref();
+		accessed.and_then(|accessed| accessed.get_authority(address).map(|(target, _)| *target))
 	}
 
 	fn gas_left(&self) -> U256 {
@@ -1829,11 +1849,16 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 			Ok(x) => x,
 			Err(err) => return (ExitReason::Error(err), Vec::new()),
 		};
+		let delegated_designator_is_cold = match self.executor.is_authority_cold(code_address) {
+			Ok(x) => x,
+			Err(err) => return (ExitReason::Error(err), Vec::new()),
+		};
 
 		let gas_cost = gasometer::GasCost::Call {
 			value: transfer.clone().map_or_else(U256::zero, |x| x.value),
 			gas: U256::from(gas_limit.unwrap_or(u64::MAX)),
 			target_is_cold,
+			delegated_designator_is_cold,
 			target_exists: self.executor.exists(code_address),
 		};
 

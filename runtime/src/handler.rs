@@ -80,6 +80,14 @@ pub trait Handler {
 	/// Return `ExitError`
 	fn is_cold(&mut self, address: H160, index: Option<H256>) -> Result<bool, ExitError>;
 
+	/// Check if the delegated address of authority is cold (EIP-7702).
+	///
+	/// # Errors
+	/// Return `ExitError`
+	fn is_authority_cold(&mut self, address: H160) -> Result<Option<bool>, ExitError>;
+	/// Return the target address of the authority delegation designation (EIP-7702).
+	fn authority_target(&self, address: H160) -> Option<H160>;
+
 	/// Set storage value of address at index.
 	///
 	/// # Errors

@@ -619,8 +619,8 @@ pub fn dynamic_opcode_cost<H: Handler>(
 	is_static: bool,
 	config: &Config,
 	handler: &mut H,
-) -> Result<(GasCost, StorageTarget, Option<MemoryCost>), ExitError> {
-	let mut storage_target = StorageTarget::None;
+) -> Result<(GasCost, Vec<StorageTarget>, Option<MemoryCost>), ExitError> {
+	let mut storage_target = Vec::new();
 	let gas_cost = match opcode {
 		Opcode::RETURN => GasCost::Zero,
 
@@ -660,14 +660,18 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::EXTCODESIZE => {
 			let target = stack.peek_h256(0)?.into();
-			storage_target = StorageTarget::Address(target);
+			if let Some(authority_target) = handler.authority_target(target) {
+				storage_target.push(StorageTarget::Address(authority_target));
+			}
+			storage_target.push(StorageTarget::Address(target));
 			GasCost::ExtCodeSize {
 				target_is_cold: handler.is_cold(target, None)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target)?,
 			}
 		}
 		Opcode::BALANCE => {
 			let target = stack.peek_h256(0)?.into();
-			storage_target = StorageTarget::Address(target);
+			storage_target.push(StorageTarget::Address(target));
 			GasCost::Balance {
 				target_is_cold: handler.is_cold(target, None)?,
 			}
@@ -676,20 +680,28 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::EXTCODEHASH if config.has_ext_code_hash => {
 			let target = stack.peek_h256(0)?.into();
-			storage_target = StorageTarget::Address(target);
+			if let Some(authority_target) = handler.authority_target(target) {
+				storage_target.push(StorageTarget::Address(authority_target));
+			}
+			storage_target.push(StorageTarget::Address(target));
 			GasCost::ExtCodeHash {
 				target_is_cold: handler.is_cold(target, None)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target)?,
 			}
 		}
 		Opcode::EXTCODEHASH => GasCost::Invalid(opcode),
 
 		Opcode::CALLCODE => {
 			let target = stack.peek_h256(1)?.into();
-			storage_target = StorageTarget::Address(target);
+			if let Some(authority_target) = handler.authority_target(target) {
+				storage_target.push(StorageTarget::Address(authority_target));
+			}
+			storage_target.push(StorageTarget::Address(target));
 			GasCost::CallCode {
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
 				target_is_cold: handler.is_cold(target, None)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target)?,
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -698,10 +710,14 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		}
 		Opcode::STATICCALL => {
 			let target = stack.peek_h256(1)?.into();
-			storage_target = StorageTarget::Address(target);
+			if let Some(authority_target) = handler.authority_target(target) {
+				storage_target.push(StorageTarget::Address(authority_target));
+			}
+			storage_target.push(StorageTarget::Address(target));
 			GasCost::StaticCall {
 				gas: stack.peek(0)?,
 				target_is_cold: handler.is_cold(target, None)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target)?,
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -713,9 +729,13 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::EXTCODECOPY => {
 			let target = stack.peek_h256(0)?.into();
-			storage_target = StorageTarget::Address(target);
+			if let Some(authority_target) = handler.authority_target(target) {
+				storage_target.push(StorageTarget::Address(authority_target));
+			}
+			storage_target.push(StorageTarget::Address(target));
 			GasCost::ExtCodeCopy {
 				target_is_cold: handler.is_cold(target, None)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target)?,
 				len: stack.peek(3)?,
 			}
 		}
@@ -727,7 +747,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::SLOAD => {
 			let index = stack.peek_h256(0)?;
-			storage_target = StorageTarget::Slot(address, index);
+			storage_target.push(StorageTarget::Slot(address, index));
 			GasCost::SLoad {
 				target_is_cold: handler.is_cold(address, Some(index))?,
 			}
@@ -735,10 +755,14 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::DELEGATECALL if config.has_delegate_call => {
 			let target = stack.peek_h256(1)?.into();
-			storage_target = StorageTarget::Address(target);
+			if let Some(authority_target) = handler.authority_target(target) {
+				storage_target.push(StorageTarget::Address(authority_target));
+			}
+			storage_target.push(StorageTarget::Address(target));
 			GasCost::DelegateCall {
 				gas: stack.peek(0)?,
 				target_is_cold: handler.is_cold(target, None)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target)?,
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -756,7 +780,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		Opcode::SSTORE if !is_static => {
 			let index = stack.peek_h256(0)?;
 			let value = stack.peek_h256(1)?;
-			storage_target = StorageTarget::Slot(address, index);
+			storage_target.push(StorageTarget::Slot(address, index));
 
 			GasCost::SStore {
 				original: handler.original_storage(address, index),
@@ -791,7 +815,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::SELFDESTRUCT if !is_static => {
 			let target = stack.peek_h256(0)?.into();
-			storage_target = StorageTarget::Address(target);
+			storage_target.push(StorageTarget::Address(target));
 			GasCost::Suicide {
 				value: handler.balance(address),
 				target_is_cold: handler.is_cold(target, None)?,
@@ -804,11 +828,15 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		}
 		Opcode::CALL if !is_static || (is_static && stack.peek(2)? == U256::zero()) => {
 			let target = stack.peek_h256(1)?.into();
-			storage_target = StorageTarget::Address(target);
+			if let Some(authority_target) = handler.authority_target(target) {
+				storage_target.push(StorageTarget::Address(authority_target));
+			}
+			storage_target.push(StorageTarget::Address(target));
 			GasCost::Call {
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
 				target_is_cold: handler.is_cold(target, None)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target)?,
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -934,16 +962,19 @@ impl<'config> Inner<'config> {
 	}
 
 	/// Returns the gas cost numerical value.
+	#[allow(clippy::too_many_lines)]
 	fn gas_cost(&self, cost: GasCost, gas: u64) -> Result<u64, ExitError> {
 		Ok(match cost {
 			GasCost::Call {
 				value,
 				target_is_cold,
+				delegated_designator_is_cold,
 				target_exists,
 				..
 			} => costs::call_cost(
 				value,
 				target_is_cold,
+				delegated_designator_is_cold,
 				true,
 				true,
 				!target_exists,
@@ -952,11 +983,13 @@ impl<'config> Inner<'config> {
 			GasCost::CallCode {
 				value,
 				target_is_cold,
+				delegated_designator_is_cold,
 				target_exists,
 				..
 			} => costs::call_cost(
 				value,
 				target_is_cold,
+				delegated_designator_is_cold,
 				true,
 				false,
 				!target_exists,
@@ -964,11 +997,13 @@ impl<'config> Inner<'config> {
 			),
 			GasCost::DelegateCall {
 				target_is_cold,
+				delegated_designator_is_cold,
 				target_exists,
 				..
 			} => costs::call_cost(
 				U256::zero(),
 				target_is_cold,
+				delegated_designator_is_cold,
 				false,
 				false,
 				!target_exists,
@@ -976,11 +1011,13 @@ impl<'config> Inner<'config> {
 			),
 			GasCost::StaticCall {
 				target_is_cold,
+				delegated_designator_is_cold,
 				target_exists,
 				..
 			} => costs::call_cost(
 				U256::zero(),
 				target_is_cold,
+				delegated_designator_is_cold,
 				false,
 				true,
 				!target_exists,
@@ -1014,19 +1051,38 @@ impl<'config> Inner<'config> {
 			GasCost::Low => u64::from(consts::G_LOW),
 			GasCost::Invalid(opcode) => return Err(ExitError::InvalidCode(opcode)),
 
-			GasCost::ExtCodeSize { target_is_cold } => {
-				costs::address_access_cost(target_is_cold, self.config.gas_ext_code, self.config)
-			}
+			GasCost::ExtCodeSize {
+				target_is_cold,
+				delegated_designator_is_cold,
+			} => costs::address_access_cost(
+				target_is_cold,
+				delegated_designator_is_cold,
+				self.config.gas_ext_code,
+				self.config,
+			),
 			GasCost::ExtCodeCopy {
 				target_is_cold,
+				delegated_designator_is_cold,
 				len,
-			} => costs::extcodecopy_cost(len, target_is_cold, self.config)?,
-			GasCost::Balance { target_is_cold } => {
-				costs::address_access_cost(target_is_cold, self.config.gas_balance, self.config)
-			}
-			GasCost::BlockHash => u64::from(consts::G_BLOCKHASH),
-			GasCost::ExtCodeHash { target_is_cold } => costs::address_access_cost(
+			} => costs::extcodecopy_cost(
+				len,
 				target_is_cold,
+				delegated_designator_is_cold,
+				self.config,
+			)?,
+			GasCost::Balance { target_is_cold } => costs::address_access_cost(
+				target_is_cold,
+				None,
+				self.config.gas_balance,
+				self.config,
+			),
+			GasCost::BlockHash => u64::from(consts::G_BLOCKHASH),
+			GasCost::ExtCodeHash {
+				target_is_cold,
+				delegated_designator_is_cold,
+			} => costs::address_access_cost(
+				target_is_cold,
+				delegated_designator_is_cold,
 				self.config.gas_ext_code_hash,
 				self.config,
 			),
@@ -1070,6 +1126,8 @@ pub enum GasCost {
 	ExtCodeSize {
 		/// True if address has not been previously accessed in this transaction
 		target_is_cold: bool,
+		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
+		delegated_designator_is_cold: Option<bool>,
 	},
 	/// Gas cost for `BALANCE`.
 	Balance {
@@ -1082,6 +1140,8 @@ pub enum GasCost {
 	ExtCodeHash {
 		/// True if address has not been previously accessed in this transaction
 		target_is_cold: bool,
+		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
+		delegated_designator_is_cold: Option<bool>,
 	},
 
 	/// Gas cost for `CALL`.
@@ -1092,6 +1152,8 @@ pub enum GasCost {
 		gas: U256,
 		/// True if target has not been previously accessed in this transaction
 		target_is_cold: bool,
+		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
+		delegated_designator_is_cold: Option<bool>,
 		/// Whether the target exists.
 		target_exists: bool,
 	},
@@ -1103,6 +1165,8 @@ pub enum GasCost {
 		gas: U256,
 		/// True if target has not been previously accessed in this transaction
 		target_is_cold: bool,
+		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
+		delegated_designator_is_cold: Option<bool>,
 		/// Whether the target exists.
 		target_exists: bool,
 	},
@@ -1112,6 +1176,8 @@ pub enum GasCost {
 		gas: U256,
 		/// True if target has not been previously accessed in this transaction
 		target_is_cold: bool,
+		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
+		delegated_designator_is_cold: Option<bool>,
 		/// Whether the target exists.
 		target_exists: bool,
 	},
@@ -1121,6 +1187,8 @@ pub enum GasCost {
 		gas: U256,
 		/// True if target has not been previously accessed in this transaction
 		target_is_cold: bool,
+		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
+		delegated_designator_is_cold: Option<bool>,
 		/// Whether the target exists.
 		target_exists: bool,
 	},
@@ -1162,6 +1230,8 @@ pub enum GasCost {
 	ExtCodeCopy {
 		/// True if target has not been previously accessed in this transaction
 		target_is_cold: bool,
+		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
+		delegated_designator_is_cold: Option<bool>,
 		/// Length.
 		len: U256,
 	},

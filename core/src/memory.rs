@@ -11,7 +11,7 @@ use primitive_types::{H256, U256};
 pub struct Memory {
 	/// Memory data
 	data: Vec<u8>,
-	/// Memory effective length, that chanded after resize operations.
+	/// Memory effective length, that changed after resize operations.
 	effective_len: usize,
 	/// Memory limit
 	limit: usize,
