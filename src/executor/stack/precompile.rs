@@ -108,11 +108,7 @@ pub trait PrecompileSet {
 }
 
 pub enum IsPrecompileResult {
-	Answer {
-		is_precompile: bool,
-		extra_cost: u64,
-	},
-	OutOfGas,
+	Answer { is_precompile: bool },
 }
 
 impl PrecompileSet for () {
@@ -123,7 +119,6 @@ impl PrecompileSet for () {
 	fn is_precompile(&self, _: H160, _: u64) -> IsPrecompileResult {
 		IsPrecompileResult::Answer {
 			is_precompile: false,
-			extra_cost: 0,
 		}
 	}
 }
@@ -164,7 +159,6 @@ impl PrecompileSet for BTreeMap<H160, PrecompileFn> {
 	fn is_precompile(&self, address: H160, _: u64) -> IsPrecompileResult {
 		IsPrecompileResult::Answer {
 			is_precompile: self.contains_key(&address),
-			extra_cost: 0,
 		}
 	}
 }
