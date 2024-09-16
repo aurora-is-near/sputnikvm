@@ -58,6 +58,7 @@ pub struct Authorization {
 
 impl Authorization {
 	/// Create a new `Authorization` with given `authority`, `address`, and `nonce`.
+	#[must_use]
 	pub const fn new(authority: H160, address: H160, nonce: u64) -> Self {
 		Self {
 			authority,
@@ -68,12 +69,14 @@ impl Authorization {
 
 	/// Returns `true` if `authority` is delegated to `address`.
 	/// `0xef0100 ++ address`, and it is always 23 bytes.
+	#[must_use]
 	pub fn is_delegated(code: &[u8]) -> bool {
 		code.len() == 23 && code.starts_with(&[0xEF, 0x01, 0x00])
 	}
 
 	/// Get `authority` delegated `address`.
 	/// It checks, is it delegation designation (EIP-7702).
+	#[must_use]
 	pub fn get_delegated_address(code: &[u8]) -> Option<H160> {
 		if Self::is_delegated(code) {
 			// `code` size is always 23 bytes.
@@ -85,6 +88,7 @@ impl Authorization {
 
 	/// Returns the delegation code as composing: `0xef0100 ++ address`.
 	/// Result code is always 23 bytes.
+	#[must_use]
 	pub fn delegation_code(&self) -> Vec<u8> {
 		let mut code = Vec::with_capacity(23);
 		code.extend(&[0xEF, 0x01, 0x00]);

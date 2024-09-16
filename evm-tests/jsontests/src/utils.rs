@@ -1,6 +1,8 @@
 use evm::backend::MemoryAccount;
+use evm::ExitError;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 pub fn u256_to_h256(u: U256) -> H256 {
@@ -137,6 +139,83 @@ pub fn flush() {
 	io::stdout().flush().expect("Could not flush stdout");
 }
 
+/// EIP-7702
+pub mod eip7702 {
+	use super::{Digest, Keccak256, H160, H256, U256};
+	use evm::ExitError;
+	use rlp::RlpStream;
+
+	pub const MAGIC: u8 = 0x5;
+
+	#[derive(Debug, Clone, PartialEq, Eq)]
+	pub struct Authorization {
+		pub chain_id: U256,
+		pub address: H160,
+		pub nonce: u64,
+	}
+
+	impl Authorization {
+		#[must_use]
+		pub const fn new(chain_id: U256, address: H160, nonce: u64) -> Self {
+			Self {
+				chain_id,
+				address,
+				nonce,
+			}
+		}
+
+		fn rlp_append(&self, s: &mut RlpStream) {
+			s.begin_list(3);
+			s.append(&self.chain_id);
+			s.append(&self.address);
+			s.append(&self.nonce);
+		}
+
+		pub fn signature_hash(&self) -> H256 {
+			let mut rlp_stream = RlpStream::new();
+			rlp_stream.append(&MAGIC);
+			self.rlp_append(&mut rlp_stream);
+			H256::from_slice(Keccak256::digest(rlp_stream.as_raw()).as_slice())
+		}
+	}
+
+	#[derive(Debug, Clone, PartialEq, Eq)]
+	pub struct SignedAuthorization {
+		chain_id: U256,
+		address: H160,
+		nonce: u64,
+		v: bool,
+		r: U256,
+		s: U256,
+	}
+
+	impl SignedAuthorization {
+		#[must_use]
+		pub const fn new(
+			chain_id: U256,
+			address: H160,
+			nonce: u64,
+			r: U256,
+			s: U256,
+			v: bool,
+		) -> Self {
+			Self {
+				chain_id,
+				address,
+				nonce,
+				s,
+				r,
+				v,
+			}
+		}
+
+		pub fn recover_address(&self) -> Result<H160, ExitError> {
+			let auth = Authorization::new(self.chain_id, self.address, self.nonce).signature_hash();
+			super::ecrecover(auth, &super::vrs_to_arr(self.v, self.r, self.s))
+		}
+	}
+}
+
 /// [EIP-4844]: https://eips.ethereum.org/EIPS/eip-4844
 pub mod eip_4844 {
 	use super::U256;
@@ -241,13 +320,16 @@ pub mod eip_4844 {
 }
 
 pub mod transaction {
+	use crate::state::TxType;
+	use crate::utils::eip7702;
 	use ethjson::hash::Address;
 	use ethjson::maybe::MaybeEmpty;
 	use ethjson::spec::ForkSpec;
-	use ethjson::test_helpers::state::MultiTransaction;
+	use ethjson::test_helpers::state::{MultiTransaction, PostStateResult};
 	use ethjson::transaction::Transaction;
 	use ethjson::uint::Uint;
 	use evm::backend::MemoryVicinity;
+	use evm::executor::stack::Authorization;
 	use evm::gasometer::{self, Gasometer};
 	use primitive_types::{H160, H256, U256};
 
@@ -263,7 +345,9 @@ pub mod transaction {
 		blob_gas_price: Option<u128>,
 		data_fee: Option<U256>,
 		spec: &ForkSpec,
-	) -> Result<(), InvalidTxReason> {
+		tx_state: &PostStateResult,
+	) -> Result<Vec<Authorization>, InvalidTxReason> {
+		let mut authorization_list: Vec<Authorization> = vec![];
 		match intrinsic_gas(tx, config) {
 			None => return Err(InvalidTxReason::IntrinsicGas),
 			Some(required_gas) => {
@@ -345,7 +429,38 @@ pub mod transaction {
 			}
 		}
 
-		Ok(())
+		if *spec >= ForkSpec::Prague {
+			// EIP-7702 - if transaction type is EOAAccountCode then
+			// `authorization_list` must be present
+			if TxType::from_txbytes(&tx_state.txbytes) == TxType::EOAAccountCode
+				&& test_tx.authorization_list.is_empty()
+			{
+				return Err(InvalidTxReason::AuthorizationListNotExist);
+			}
+			for auth in test_tx.authorization_list.iter() {
+				let auth_address = eip7702::SignedAuthorization::new(
+					auth.chain_id.0,
+					auth.address.0,
+					auth.nonce.0.as_u64(),
+					auth.r.0,
+					auth.s.0,
+					auth.v.0.as_u32() > 0,
+				)
+				.recover_address();
+				let Ok(auth_address) = auth_address else {
+					continue;
+				};
+				authorization_list.push(Authorization {
+					authority: auth_address,
+					address: auth.address.0,
+					nonce: auth.nonce.0.as_u64(),
+				});
+			}
+		} else if !test_tx.authorization_list.is_empty() {
+			return Err(InvalidTxReason::AuthorizationListNotSupported);
+		}
+
+		Ok(authorization_list)
 	}
 
 	fn intrinsic_gas(tx: &Transaction, config: &evm::Config) -> Option<u64> {
@@ -360,9 +475,8 @@ pub mod transaction {
 			.map(|(a, s)| (a.0, s.iter().map(|h| h.0).collect()))
 			.collect();
 
-		// TODO: add authorization_list to TX
-		// let authorization_list_len = tx.authorization_list.len();
-		let authorization_list_len = 0;
+		// EIP-7702
+		let authorization_list_len = tx.authorization_list.len();
 
 		let cost = if is_contract_creation {
 			gasometer::create_transaction_cost(data, &access_list, authorization_list_len)
@@ -391,5 +505,38 @@ pub mod transaction {
 		BlobVersionedHashesNotSupported,
 		MaxFeePerBlobGasNotSupported,
 		GasPriseEip1559,
+		AuthorizationListNotExist,
+		AuthorizationListNotSupported,
 	}
+}
+
+fn ecrecover(hash: H256, signature: &[u8]) -> Result<H160, ExitError> {
+	let hash = libsecp256k1::Message::parse_slice(hash.as_bytes())
+		.map_err(|e| ExitError::Other(Cow::from(e.to_string())))?;
+	let v = signature[64];
+	let signature = libsecp256k1::Signature::parse_standard_slice(&signature[0..64])
+		.map_err(|e| ExitError::Other(Cow::from(e.to_string())))?;
+	let bit = match v {
+		0..=26 => v,
+		_ => v - 27,
+	};
+
+	if let Ok(recovery_id) = libsecp256k1::RecoveryId::parse(bit) {
+		if let Ok(public_key) = libsecp256k1::recover(&hash, &signature, &recovery_id) {
+			// recover returns a 65-byte key, but addresses come from the raw 64-byte key
+			let r = sha3::Keccak256::digest(&public_key.serialize()[1..]);
+			return Ok(H160::from_slice(&r[12..]));
+		}
+	}
+
+	Err(ExitError::Other(Cow::from("ECRecoverErr unknown error")))
+}
+
+/// v, r, s signature values to array
+fn vrs_to_arr(v: bool, r: U256, s: U256) -> [u8; 65] {
+	let mut result = [0u8; 65]; // (r, s, v), typed (uint256, uint256, uint8)
+	r.to_big_endian(&mut result[0..32]);
+	s.to_big_endian(&mut result[32..64]);
+	result[64] = u8::from(v);
+	result
 }

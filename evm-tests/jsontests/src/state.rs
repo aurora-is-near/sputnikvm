@@ -884,6 +884,23 @@ fn assert_vicinity_validation(
 			}
 			_ => panic!("Unexpected validation reason: {reason:?} [{spec:?}] {name}"),
 		},
+		ForkSpec::Prague => match reason {
+			InvalidTxReason::GasPriceLessThenBlockBaseFee => {
+				for (i, state) in states.iter().enumerate() {
+					let expected = state
+						.expect_exception
+						.as_deref()
+						.expect("expected error message for test: {reason:?} [{spec}] {name}:{i}");
+					let is_checked = expected == "TR_FeeCapLessThanBlocks"
+						|| expected == "TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS";
+					assert!(
+						is_checked,
+						"unexpected error message {expected:?} for: {reason:?} [{spec:?}] {name}:{i}",
+					);
+				}
+			}
+			_ => panic!("Unexpected validation reason: {reason:?} [{spec:?}] {name}"),
+		},
 		_ => panic!("Unexpected validation reason: {reason:?} [{spec:?}] {name}"),
 	}
 }
@@ -1132,6 +1149,8 @@ fn test_run(
 			let gas_limit: u64 = transaction.gas_limit.into();
 			let data: Vec<u8> = transaction.data.clone().into();
 
+			//println!("-> {:?}", transaction.authorization_list);
+
 			let valid_tx = crate::utils::transaction::validate(
 				&transaction,
 				test.0.env.gas_limit.0,
@@ -1142,12 +1161,15 @@ fn test_run(
 				blob_gas_price,
 				data_max_fee,
 				spec,
+				state,
 			);
+			// Only execute valid transactions
 			if let Err(err) = &valid_tx {
 				if check_validate_exit_reason(err, &state.expect_exception, name, spec) {
 					continue;
 				}
 			}
+			let authorization_list = valid_tx.unwrap();
 
 			// We do not check overflow after TX validation
 			let total_fee = if let Some(data_fee) = data_fee {
@@ -1156,125 +1178,126 @@ fn test_run(
 				vicinity.effective_gas_price * gas_limit
 			};
 
-			// Only execute valid transactions
-			if valid_tx.is_ok() {
-				let metadata =
-					StackSubstateMetadata::new(transaction.gas_limit.into(), &gasometer_config);
-				let executor_state = MemoryStackState::new(metadata, &backend);
-				let precompile = JsonPrecompile::precompile(spec).unwrap();
-				let mut executor = StackExecutor::new_with_precompiles(
-					executor_state,
-					&gasometer_config,
-					&precompile,
-				);
-				executor.state_mut().withdraw(caller, total_fee).unwrap();
+			let metadata =
+				StackSubstateMetadata::new(transaction.gas_limit.into(), &gasometer_config);
+			let executor_state = MemoryStackState::new(metadata, &backend);
+			let precompile = JsonPrecompile::precompile(spec).unwrap();
+			let mut executor =
+				StackExecutor::new_with_precompiles(executor_state, &gasometer_config, &precompile);
+			executor.state_mut().withdraw(caller, total_fee).unwrap();
 
-				let access_list = transaction
-					.access_list
-					.into_iter()
-					.map(|(address, keys)| (address.0, keys.into_iter().map(|k| k.0).collect()))
-					.collect();
+			let access_list = transaction
+				.access_list
+				.into_iter()
+				.map(|(address, keys)| (address.0, keys.into_iter().map(|k| k.0).collect()))
+				.collect();
 
-				// EIP-3607: Reject transactions from senders with deployed code
-				if caller_code.is_empty() {
-					match transaction.to {
-						ethjson::maybe::MaybeEmpty::Some(to) => {
-							let value = transaction.value.into();
+			// EIP-3607: Reject transactions from senders with deployed code
+			if caller_code.is_empty() {
+				match transaction.to {
+					ethjson::maybe::MaybeEmpty::Some(to) => {
+						let value = transaction.value.into();
 
-							// Exit reason for Call do not analyzed as it mostly do not expect exceptions
-							let _reason = executor.transact_call(
-								caller,
-								to.into(),
-								value,
-								data,
-								gas_limit,
-								access_list,
-								Vec::new(),
-							);
-							assert_call_exit_exception(&state.expect_exception);
-						}
-						ethjson::maybe::MaybeEmpty::None => {
-							let code = data;
-							let value = transaction.value.into();
+						// Exit reason for Call do not analyzed as it mostly do not expect exceptions
+						let _reason = executor.transact_call(
+							caller,
+							to.into(),
+							value,
+							data,
+							gas_limit,
+							access_list,
+							authorization_list,
+						);
+						assert_call_exit_exception(&state.expect_exception);
+					}
+					ethjson::maybe::MaybeEmpty::None => {
+						let code = data;
+						let value = transaction.value.into();
 
-							let reason = executor.transact_create(
-								caller,
-								value,
-								code,
-								gas_limit,
-								access_list,
-								Vec::new(),
-							);
-							if check_create_exit_reason(
-								&reason.0,
-								&state.expect_exception,
-								&format!("{spec:?}-{name}-{i}"),
-							) {
-								continue;
-							}
+						let reason = executor.transact_create(
+							caller,
+							value,
+							code,
+							gas_limit,
+							access_list,
+							authorization_list,
+						);
+						if check_create_exit_reason(
+							&reason.0,
+							&state.expect_exception,
+							&format!("{spec:?}-{name}-{i}"),
+						) {
+							continue;
 						}
 					}
-				} else {
-					assert_empty_create_caller(&state.expect_exception, name);
-				}
-
-				if verbose_output.print_state {
-					println!(
-						"gas_limit: {gas_limit}\nused_gas: {:?}",
-						executor.used_gas()
-					);
-				}
-
-				let actual_fee = executor.fee(vicinity.effective_gas_price);
-				// Forks after London burn miner rewards and thus have different gas fee
-				// calculation (see EIP-1559)
-				let miner_reward = if spec.is_eth2() {
-					let coinbase_gas_price = vicinity
-						.effective_gas_price
-						.saturating_sub(vicinity.block_base_fee_per_gas);
-					executor.fee(coinbase_gas_price)
-				} else {
-					actual_fee
-				};
-
-				executor
-					.state_mut()
-					.deposit(vicinity.block_coinbase, miner_reward);
-
-				let amount_to_return_for_caller = data_fee.map_or_else(
-					|| total_fee - actual_fee,
-					|data_fee| total_fee - actual_fee - data_fee,
-				);
-				executor
-					.state_mut()
-					.deposit(caller, amount_to_return_for_caller);
-
-				let (values, logs) = executor.into_state().deconstruct();
-
-				backend.apply(values, logs, delete_empty);
-				// It's special case for hard forks: London or before London
-				// According to EIP-160 empty account should be removed. But in that particular test - original test state
-				// contains account 0x03 (it's precompile), and when precompile 0x03 was called it exit with
-				// OutOfGas result. And after exit of substate account not marked as touched, as exit reason
-				// is not success. And it mean, that it don't appeared in Apply::Modify, then as untouched it
-				// can't be removed by backend.apply event. In that particular case we should manage it manually.
-				// NOTE: it's not realistic situation for real life flow.
-				if *spec <= ForkSpec::London && delete_empty && name == "failed_tx_xcf416c53" {
-					let state = backend.state_mut();
-					state.retain(|addr, account| {
-						// Check is account empty for precompile 0x03
-						!(addr == &H160::from_low_u64_be(3)
-							&& account.balance == U256::zero()
-							&& account.nonce == U256::zero()
-							&& account.code.is_empty())
-					});
 				}
 			} else {
-				if let Some(e) = state.expect_exception.as_ref() {
-					panic!("unexpected exception: {e} for test {name}-{i}");
+				// According to EIP7702 - https://eips.ethereum.org/EIPS/eip-7702#transaction-origination:
+				// allow EOAs whose code is a valid delegation designation, i.e. `0xef0100 || address`,
+				// to continue to originate transactions.
+				#[allow(clippy::collapsible_if)]
+				if !(*spec >= ForkSpec::Prague
+					&& TxType::from_txbytes(&state.txbytes) == TxType::EOAAccountCode)
+				{
+					// TODO: fix it
+					if *spec < ForkSpec::Prague {
+						assert_empty_create_caller(&state.expect_exception, name);
+					}
 				}
-				panic!("unexpected validation for test {name}-{i}")
 			}
+
+			if verbose_output.print_state {
+				println!(
+					"gas_limit: {gas_limit}\nused_gas: {:?}",
+					executor.used_gas()
+				);
+			}
+
+			let actual_fee = executor.fee(vicinity.effective_gas_price);
+			// Forks after London burn miner rewards and thus have different gas fee
+			// calculation (see EIP-1559)
+			let miner_reward = if spec.is_eth2() {
+				let coinbase_gas_price = vicinity
+					.effective_gas_price
+					.saturating_sub(vicinity.block_base_fee_per_gas);
+				executor.fee(coinbase_gas_price)
+			} else {
+				actual_fee
+			};
+
+			executor
+				.state_mut()
+				.deposit(vicinity.block_coinbase, miner_reward);
+
+			let amount_to_return_for_caller = data_fee.map_or_else(
+				|| total_fee - actual_fee,
+				|data_fee| total_fee - actual_fee - data_fee,
+			);
+			executor
+				.state_mut()
+				.deposit(caller, amount_to_return_for_caller);
+
+			let (values, logs) = executor.into_state().deconstruct();
+
+			backend.apply(values, logs, delete_empty);
+			// It's special case for hard forks: London or before London
+			// According to EIP-160 empty account should be removed. But in that particular test - original test state
+			// contains account 0x03 (it's precompile), and when precompile 0x03 was called it exit with
+			// OutOfGas result. And after exit of substate account not marked as touched, as exit reason
+			// is not success. And it mean, that it don't appeared in Apply::Modify, then as untouched it
+			// can't be removed by backend.apply event. In that particular case we should manage it manually.
+			// NOTE: it's not realistic situation for real life flow.
+			if *spec <= ForkSpec::London && delete_empty && name == "failed_tx_xcf416c53" {
+				let state = backend.state_mut();
+				state.retain(|addr, account| {
+					// Check is account empty for precompile 0x03
+					!(addr == &H160::from_low_u64_be(3)
+						&& account.balance == U256::zero()
+						&& account.nonce == U256::zero()
+						&& account.code.is_empty())
+				});
+			}
+
 			let (is_valid_hash, actual_hash) =
 				crate::utils::check_valid_hash(&state.hash.0, backend.state());
 			if !is_valid_hash {
@@ -1324,8 +1347,8 @@ fn test_run(
 }
 
 /// Denotes the type of transaction.
-#[derive(Debug, PartialEq)]
-enum TxType {
+#[derive(Debug, PartialEq, Eq)]
+pub enum TxType {
 	/// All transactions before EIP-2718 are legacy.
 	Legacy,
 	/// https://eips.ethereum.org/EIPS/eip-2718
@@ -1334,18 +1357,21 @@ enum TxType {
 	DynamicFee,
 	/// https://eips.ethereum.org/EIPS/eip-4844
 	ShardBlob,
+	/// https://eips.ethereum.org/EIPS/eip-7702
+	EOAAccountCode,
 }
 
 impl TxType {
 	/// Whether this is a legacy, access list, dynamic fee, etc transaction
 	// Taken from geth's core/types/transaction.go/UnmarshalBinary, but we only detect the transaction
 	// type rather than unmarshal the entire payload.
-	const fn from_txbytes(txbytes: &[u8]) -> Self {
+	pub const fn from_txbytes(txbytes: &[u8]) -> Self {
 		match txbytes[0] {
 			b if b > 0x7f => Self::Legacy,
 			1 => Self::AccessList,
 			2 => Self::DynamicFee,
 			3 => Self::ShardBlob,
+			4 => Self::EOAAccountCode,
 			_ => panic!(
 				"Unknown tx type. \
 You may need to update the TxType enum if Ethereum introduced new enveloped transaction types."
