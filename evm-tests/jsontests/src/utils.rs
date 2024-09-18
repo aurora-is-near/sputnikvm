@@ -437,7 +437,13 @@ pub mod transaction {
 			{
 				return Err(InvalidTxReason::AuthorizationListNotExist);
 			}
+			// Check EIP-7702 Spec validation steps: 1 and 2
+			// Other validation step inside EVM transact logic.
 			for auth in test_tx.authorization_list.iter() {
+				// 1. Verify the chain id is either 0 or the chain’s current ID.
+				let mut is_valid =
+					auth.chain_id.0 == U256::from(0) || auth.chain_id.0 == vicinity.chain_id;
+				// 2. `authority = ecrecover(keccak(MAGIC || rlp([chain_id, address, nonce])), y_parity, r, s]`
 				let auth_address = eip7702::SignedAuthorization::new(
 					auth.chain_id.0,
 					auth.address.0,
@@ -447,13 +453,16 @@ pub mod transaction {
 					auth.v.0.as_u32() > 0,
 				)
 				.recover_address();
-				let Ok(auth_address) = auth_address else {
-					continue;
-				};
+				let auth_address = auth_address.unwrap_or_else(|_| {
+					is_valid = false;
+					H160::zero()
+				});
+
 				authorization_list.push(Authorization {
 					authority: auth_address,
 					address: auth.address.0,
 					nonce: auth.nonce.0.as_u64(),
+					is_valid,
 				});
 			}
 		} else if !test_tx.authorization_list.is_empty() {

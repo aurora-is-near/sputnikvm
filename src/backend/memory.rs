@@ -202,6 +202,8 @@ impl<'vicinity> ApplyBackend for MemoryBackend<'vicinity> {
 					storage,
 					reset_storage,
 				} => {
+					// TODOFEE
+					// println!("# {:?} [{:?}] []", address.clone(), basic.clone());
 					let is_empty = {
 						let account = self.state.entry(address).or_default();
 						account.balance = basic.balance;

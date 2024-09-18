@@ -493,6 +493,34 @@ impl<'config> MemoryStackSubstate<'config> {
 	pub fn set_tstorage(&mut self, address: H160, key: H256, value: U256) {
 		self.tstorages.insert((address, key), value);
 	}
+
+	/// EIP-7702 - check is authority cold.
+	fn is_authority_cold(&self, address: H160) -> Option<bool> {
+		self.authority_target(address)
+			.map(|target| self.is_cold(target))
+	}
+
+	/// EIP-7702 - get authority target address.
+	fn authority_target(&self, address: H160) -> Option<H160> {
+		self.get_authority_recursive(address)
+			.map(|(target, _)| *target)
+	}
+
+	/// Get authority code from the current state. If it's `None` just take a look
+	/// recursively in the parent state.
+	fn get_authority_recursive(&self, authority: H160) -> Option<&(H160, Vec<u8>)> {
+		if let Some(target) = self
+			.metadata
+			.accessed()
+			.as_ref()
+			.and_then(|accessed| accessed.get_authority(authority))
+		{
+			return Some(target);
+		}
+		self.parent
+			.as_ref()
+			.and_then(|p| p.get_authority_recursive(authority))
+	}
 }
 
 #[derive(Clone, Debug)]
@@ -688,10 +716,8 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 	/// for delegated address, for detection is address warm or cold.
 	fn authority_code(&mut self, authority: H160, code: &[u8]) -> Option<Vec<u8>> {
 		// Get code data from the cache
-		if let Some(accessed) = self.metadata().accessed() {
-			if let Some((_, code)) = accessed.get_authority(authority) {
-				return Some(code.clone());
-			}
+		if let Some((_, code)) = self.substate.get_authority_recursive(authority) {
+			return Some(code.clone());
 		}
 		// Get code for delegated address
 		if let Some(target) = Authorization::get_delegated_address(code) {
@@ -702,6 +728,14 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 			return Some(code);
 		}
 		None
+	}
+
+	fn is_authority_cold(&mut self, address: H160) -> Option<bool> {
+		self.substate.is_authority_cold(address)
+	}
+
+	fn authority_target(&self, address: H160) -> Option<H160> {
+		self.substate.authority_target(address)
 	}
 }
 

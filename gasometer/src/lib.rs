@@ -666,7 +666,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			storage_target.push(StorageTarget::Address(target));
 			GasCost::ExtCodeSize {
 				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target),
 			}
 		}
 		Opcode::BALANCE => {
@@ -686,7 +686,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			storage_target.push(StorageTarget::Address(target));
 			GasCost::ExtCodeHash {
 				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target),
 			}
 		}
 		Opcode::EXTCODEHASH => GasCost::Invalid(opcode),
@@ -701,7 +701,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
 				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target),
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -717,7 +717,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			GasCost::StaticCall {
 				gas: stack.peek(0)?,
 				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target),
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -735,7 +735,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			storage_target.push(StorageTarget::Address(target));
 			GasCost::ExtCodeCopy {
 				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target),
 				len: stack.peek(3)?,
 			}
 		}
@@ -762,7 +762,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			GasCost::DelegateCall {
 				gas: stack.peek(0)?,
 				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target),
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -836,7 +836,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
 				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target)?,
+				delegated_designator_is_cold: handler.is_authority_cold(target),
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)

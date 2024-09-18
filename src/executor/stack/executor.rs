@@ -49,21 +49,25 @@ pub enum StackExitKind {
 /// - `authority`is `ecrecovered` authority address.
 /// - `address` is delegation destination address.
 /// - `nonce` is the `nonce` value which `authority.nonce` should be equal.
+/// - `is_valid` is the flag that indicates the validity of the authorization. It is used to
+///   charge gas for each authorization item, but if it's invalid exclude from EVM `authority_list` flow.
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct Authorization {
 	pub authority: H160,
 	pub address: H160,
 	pub nonce: u64,
+	pub is_valid: bool,
 }
 
 impl Authorization {
 	/// Create a new `Authorization` with given `authority`, `address`, and `nonce`.
 	#[must_use]
-	pub const fn new(authority: H160, address: H160, nonce: u64) -> Self {
+	pub const fn new(authority: H160, address: H160, nonce: u64, is_valid: bool) -> Self {
 		Self {
 			authority,
 			address,
 			nonce,
+			is_valid,
 		}
 	}
 
@@ -402,6 +406,12 @@ pub trait StackState<'config>: Backend {
 
 	/// EIP-7702 - get delegated address from authority code.
 	fn authority_code(&mut self, authority: H160, code: &[u8]) -> Option<Vec<u8>>;
+
+	/// EIP-7702 - check is authority cold.
+	fn is_authority_cold(&mut self, address: H160) -> Option<bool>;
+
+	/// EIP-7702 - get authority target address.
+	fn authority_target(&self, address: H160) -> Option<H160>;
 }
 
 /// Stack-based executor.
@@ -809,13 +819,14 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			Err(e) => return emit_exit!(e.into(), Vec::new()),
 		}
 
-		self.warm_addresses_and_storage(caller, address, access_list);
-		// EIP-7702. authorized accounts
-		if let Err(e) = self.authorized_accounts(authorization_list) {
+		if let Err(e) = self.state.inc_nonce(caller) {
 			return (e.into(), Vec::new());
 		}
 
-		if let Err(e) = self.state.inc_nonce(caller) {
+		self.warm_addresses_and_storage(caller, address, access_list);
+		// EIP-7702. authorized accounts
+		// NOTE: it must be after `inc_nonce`
+		if let Err(e) = self.authorized_accounts(authorization_list) {
 			return (e.into(), Vec::new());
 		}
 
@@ -982,24 +993,33 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 		let mut refunded_accounts = 0;
 
-		// 3. Add authority to accessed_addresses (as defined in EIP-2929)
-		let addresses = authorization_list.iter().map(|a| a.authority);
-		self.state.metadata_mut().access_addresses(addresses);
-
 		let state = self.state_mut();
+		let mut warm_authority: Vec<H160> = Vec::with_capacity(authorization_list.len());
 		for authority in authorization_list {
+			// If EIP-7703 Spec validation steps 1 or 2 return false.
+			if !authority.is_valid {
+				continue;
+			}
+			// 3. Add authority to accessed_addresses (as defined in EIP-2929)
+			warm_authority.push(authority.authority);
+
 			// 4. Verify the code of authority is either empty or already delegated.
 			let authority_code = state.code(authority.authority);
 			if !authority_code.is_empty() && !Authorization::is_delegated(&authority_code) {
 				continue;
 			}
+
+			// TODOFEE
+			// println!("[4]");
 			// 5. Verify the nonce of authority is equal to nonce.
 			if state.basic(authority.authority).nonce != U256::from(authority.nonce) {
 				continue;
 			}
+			// TODOFEE
+			// println!("[5] {}", authority_code.is_empty());
 
 			// 6. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter if authority exists in the trie.
-			if authority_code.is_empty() {
+			if !state.is_empty(authority.authority) {
 				refunded_accounts += 1;
 			}
 			// 7. Set the code of authority to be `0xef0100 || address`. This is a delegation designation.
@@ -1015,7 +1035,16 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				authority.address,
 				delegated_address_code,
 			);
+			// TODOFEE
+			// println!("PASS");
 		}
+		// Warm addresses for [Step 3].
+		self.state
+			.metadata_mut()
+			.access_addresses(warm_authority.into_iter());
+
+		// TODOFEE
+		// println!("refunded_accounts: {refunded_accounts}");
 		self.state
 			.metadata_mut()
 			.gasometer
@@ -1570,19 +1599,13 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 
 	/// Get authority delegated address and `is_cold` status
 	/// EIP-7702
-	fn is_authority_cold(&mut self, address: H160) -> Result<Option<bool>, ExitError> {
-		if let Some(accessed) = &self.state.metadata().accessed {
-			if let Some((target, _)) = accessed.get_authority(address) {
-				return Ok(Some(self.is_cold(*target, None)?));
-			}
-		}
-		Ok(None)
+	fn is_authority_cold(&mut self, address: H160) -> Option<bool> {
+		self.state.is_authority_cold(address)
 	}
 
 	/// Return the target address of the authority delegation designation (EIP-7702).
 	fn authority_target(&self, address: H160) -> Option<H160> {
-		let accessed = self.state.metadata().accessed.as_ref();
-		accessed.and_then(|accessed| accessed.get_authority(address).map(|(target, _)| *target))
+		self.state.authority_target(address)
 	}
 
 	fn gas_left(&self) -> U256 {
@@ -1853,10 +1876,7 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 			Ok(x) => x,
 			Err(err) => return (ExitReason::Error(err), Vec::new()),
 		};
-		let delegated_designator_is_cold = match self.executor.is_authority_cold(code_address) {
-			Ok(x) => x,
-			Err(err) => return (ExitReason::Error(err), Vec::new()),
-		};
+		let delegated_designator_is_cold = self.executor.is_authority_cold(code_address);
 
 		let gas_cost = gasometer::GasCost::Call {
 			value: transfer.clone().map_or_else(U256::zero, |x| x.value),
