@@ -494,18 +494,6 @@ impl<'config> MemoryStackSubstate<'config> {
 		self.tstorages.insert((address, key), value);
 	}
 
-	/// EIP-7702 - check is authority cold.
-	fn is_authority_cold(&self, address: H160) -> Option<bool> {
-		self.authority_target(address)
-			.map(|target| self.is_cold(target))
-	}
-
-	/// EIP-7702 - get authority target address.
-	fn authority_target(&self, address: H160) -> Option<H160> {
-		self.get_authority_recursive(address)
-			.map(|(target, _)| *target)
-	}
-
 	/// Get authority code from the current state. If it's `None` just take a look
 	/// recursively in the parent state.
 	fn get_authority_recursive(&self, authority: H160) -> Option<&(H160, Vec<u8>)> {
@@ -730,12 +718,36 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 		None
 	}
 
+	/// EIP-7702 - check is authority cold.
 	fn is_authority_cold(&mut self, address: H160) -> Option<bool> {
-		self.substate.is_authority_cold(address)
+		self.authority_target(address)
+			.map(|target| self.is_cold(target))
 	}
 
-	fn authority_target(&self, address: H160) -> Option<H160> {
-		self.substate.authority_target(address)
+	/// Get authority target ( EIP-7702).
+	/// First we trying to get authority target from the cache recursively with parent state,
+	/// if it's not found we get code for the authority address and check if it's delegation
+	/// designator. If it's true, we add result to cache and return delegated target address.
+	fn authority_target(&mut self, authority: H160) -> Option<H160> {
+		// Read from cache
+		if let Some(target_address) = self
+			.substate
+			.get_authority_recursive(authority)
+			.map(|(target, _)| *target)
+		{
+			Some(target_address)
+		} else {
+			// If not found in the cache
+			// Get code for delegated address
+			let authority_code = self.code(authority);
+			if let Some(target) = Authorization::get_delegated_address(&authority_code) {
+				let code = self.code(target);
+				// Add to cache
+				self.metadata_mut().add_authority(authority, target, code);
+				return Some(target);
+			}
+			None
+		}
 	}
 }
 

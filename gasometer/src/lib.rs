@@ -602,6 +602,31 @@ pub fn static_opcode_cost(opcode: Opcode) -> Option<u32> {
 	TABLE[opcode.as_usize()]
 }
 
+/// Get and set warm address if it's not warmed.
+fn get_and_set_warm<H: Handler>(
+	handler: &mut H,
+	target: H160,
+) -> Result<(bool, Option<bool>), ExitError> {
+	let mut delegated_designator_is_cold = None;
+	if let Some(authority_target) = handler.authority_target(target) {
+		// TODOFEE
+		// println!("#### authority_target: {authority_target:?}");
+		delegated_designator_is_cold = handler.is_authority_cold(target);
+		if delegated_designator_is_cold == Some(true) {
+			// TODOFEE
+			// println!("#### WARM authority_target");
+			handler.warm_target((authority_target, None));
+		}
+	}
+	let target_is_cold = handler.is_cold(target, None)?;
+	if target_is_cold {
+		// TODOFEE
+		// println!("#### WARM target");
+		handler.warm_target((target, None));
+	}
+	Ok((target_is_cold, delegated_designator_is_cold))
+}
+
 /// Calculate the opcode cost.
 ///
 /// # Errors
@@ -619,8 +644,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 	is_static: bool,
 	config: &Config,
 	handler: &mut H,
-) -> Result<(GasCost, Vec<StorageTarget>, Option<MemoryCost>), ExitError> {
-	let mut storage_target = Vec::new();
+) -> Result<(GasCost, Option<MemoryCost>), ExitError> {
 	let gas_cost = match opcode {
 		Opcode::RETURN => GasCost::Zero,
 
@@ -660,48 +684,58 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::EXTCODESIZE => {
 			let target = stack.peek_h256(0)?.into();
+			let mut delegated_designator_is_cold = None;
 			if let Some(authority_target) = handler.authority_target(target) {
-				storage_target.push(StorageTarget::Address(authority_target));
+				// TODOFEE
+				// println!("#### authority_target: {authority_target:?}");
+				delegated_designator_is_cold = handler.is_authority_cold(target);
+				if delegated_designator_is_cold == Some(true) {
+					// TODOFEE
+					// println!("#### WARM authority_target");
+					handler.warm_target((authority_target, None));
+				}
 			}
-			storage_target.push(StorageTarget::Address(target));
+			let target_is_cold = handler.is_cold(target, None)?;
+			if target_is_cold {
+				// TODOFEE
+				// println!("#### WARM target");
+				handler.warm_target((target, None));
+			}
+			// TODOFEE
+			// println!("#### target: {target:?}");
 			GasCost::ExtCodeSize {
-				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target),
+				target_is_cold,
+				delegated_designator_is_cold,
 			}
 		}
 		Opcode::BALANCE => {
 			let target = stack.peek_h256(0)?.into();
-			storage_target.push(StorageTarget::Address(target));
-			GasCost::Balance {
-				target_is_cold: handler.is_cold(target, None)?,
+			let target_is_cold = handler.is_cold(target, None)?;
+			if target_is_cold {
+				handler.warm_target((target, None));
 			}
+			GasCost::Balance { target_is_cold }
 		}
 		Opcode::BLOCKHASH => GasCost::BlockHash,
 
 		Opcode::EXTCODEHASH if config.has_ext_code_hash => {
 			let target = stack.peek_h256(0)?.into();
-			if let Some(authority_target) = handler.authority_target(target) {
-				storage_target.push(StorageTarget::Address(authority_target));
-			}
-			storage_target.push(StorageTarget::Address(target));
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
 			GasCost::ExtCodeHash {
-				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target),
+				target_is_cold,
+				delegated_designator_is_cold,
 			}
 		}
 		Opcode::EXTCODEHASH => GasCost::Invalid(opcode),
 
 		Opcode::CALLCODE => {
 			let target = stack.peek_h256(1)?.into();
-			if let Some(authority_target) = handler.authority_target(target) {
-				storage_target.push(StorageTarget::Address(authority_target));
-			}
-			storage_target.push(StorageTarget::Address(target));
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
 			GasCost::CallCode {
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
-				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target),
+				target_is_cold,
+				delegated_designator_is_cold,
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -710,14 +744,11 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		}
 		Opcode::STATICCALL => {
 			let target = stack.peek_h256(1)?.into();
-			if let Some(authority_target) = handler.authority_target(target) {
-				storage_target.push(StorageTarget::Address(authority_target));
-			}
-			storage_target.push(StorageTarget::Address(target));
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
 			GasCost::StaticCall {
 				gas: stack.peek(0)?,
-				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target),
+				target_is_cold,
+				delegated_designator_is_cold,
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -729,13 +760,10 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::EXTCODECOPY => {
 			let target = stack.peek_h256(0)?.into();
-			if let Some(authority_target) = handler.authority_target(target) {
-				storage_target.push(StorageTarget::Address(authority_target));
-			}
-			storage_target.push(StorageTarget::Address(target));
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
 			GasCost::ExtCodeCopy {
-				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target),
+				target_is_cold,
+				delegated_designator_is_cold,
 				len: stack.peek(3)?,
 			}
 		}
@@ -747,22 +775,20 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::SLOAD => {
 			let index = stack.peek_h256(0)?;
-			storage_target.push(StorageTarget::Slot(address, index));
-			GasCost::SLoad {
-				target_is_cold: handler.is_cold(address, Some(index))?,
+			let target_is_cold = handler.is_cold(address, Some(index))?;
+			if target_is_cold {
+				handler.warm_target((address, Some(index)));
 			}
+			GasCost::SLoad { target_is_cold }
 		}
 
 		Opcode::DELEGATECALL if config.has_delegate_call => {
 			let target = stack.peek_h256(1)?.into();
-			if let Some(authority_target) = handler.authority_target(target) {
-				storage_target.push(StorageTarget::Address(authority_target));
-			}
-			storage_target.push(StorageTarget::Address(target));
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
 			GasCost::DelegateCall {
 				gas: stack.peek(0)?,
-				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target),
+				target_is_cold,
+				delegated_designator_is_cold,
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -780,13 +806,15 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		Opcode::SSTORE if !is_static => {
 			let index = stack.peek_h256(0)?;
 			let value = stack.peek_h256(1)?;
-			storage_target.push(StorageTarget::Slot(address, index));
-
+			let target_is_cold = handler.is_cold(address, Some(index))?;
+			if target_is_cold {
+				handler.warm_target((address, Some(index)));
+			}
 			GasCost::SStore {
 				original: handler.original_storage(address, index),
 				current: handler.storage(address, index),
 				new: value,
-				target_is_cold: handler.is_cold(address, Some(index))?,
+				target_is_cold,
 			}
 		}
 		Opcode::LOG0 if !is_static => GasCost::Log {
@@ -815,10 +843,13 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::SELFDESTRUCT if !is_static => {
 			let target = stack.peek_h256(0)?.into();
-			storage_target.push(StorageTarget::Address(target));
+			let target_is_cold = handler.is_cold(target, None)?;
+			if target_is_cold {
+				handler.warm_target((target, None));
+			}
 			GasCost::Suicide {
 				value: handler.balance(address),
-				target_is_cold: handler.is_cold(target, None)?,
+				target_is_cold,
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -828,15 +859,12 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		}
 		Opcode::CALL if !is_static || (is_static && stack.peek(2)? == U256::zero()) => {
 			let target = stack.peek_h256(1)?.into();
-			if let Some(authority_target) = handler.authority_target(target) {
-				storage_target.push(StorageTarget::Address(authority_target));
-			}
-			storage_target.push(StorageTarget::Address(target));
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
 			GasCost::Call {
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
-				target_is_cold: handler.is_cold(target, None)?,
-				delegated_designator_is_cold: handler.is_authority_cold(target),
+				target_is_cold,
+				delegated_designator_is_cold,
 				target_exists: {
 					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
 					handler.exists(target)
@@ -904,7 +932,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		_ => None,
 	};
 
-	Ok((gas_cost, storage_target, memory_cost))
+	Ok((gas_cost, memory_cost))
 }
 
 fn peek_memory_cost(

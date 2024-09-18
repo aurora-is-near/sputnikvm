@@ -86,7 +86,7 @@ pub trait Handler {
 	/// Return `ExitError`
 	fn is_authority_cold(&mut self, address: H160) -> Option<bool>;
 	/// Return the target address of the authority delegation designation (EIP-7702).
-	fn authority_target(&self, address: H160) -> Option<H160>;
+	fn authority_target(&mut self, address: H160) -> Option<H160>;
 
 	/// Set storage value of address at index.
 	///
@@ -190,4 +190,7 @@ pub trait Handler {
 	/// calculating additional gas cost. Gas must be charged for the authority address and
 	/// for delegated address, for detection is address warm or cold.
 	fn authority_code(&mut self, authority: H160, code: &[u8]) -> Option<Vec<u8>>;
+
+	/// Warm target according to EIP-2929
+	fn warm_target(&mut self, target: (H160, Option<H256>));
 }

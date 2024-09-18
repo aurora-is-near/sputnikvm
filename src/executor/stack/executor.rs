@@ -411,7 +411,7 @@ pub trait StackState<'config>: Backend {
 	fn is_authority_cold(&mut self, address: H160) -> Option<bool>;
 
 	/// EIP-7702 - get authority target address.
-	fn authority_target(&self, address: H160) -> Option<H160>;
+	fn authority_target(&mut self, address: H160) -> Option<H160>;
 }
 
 /// Stack-based executor.
@@ -1002,7 +1002,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			}
 			// 3. Add authority to accessed_addresses (as defined in EIP-2929)
 			warm_authority.push(authority.authority);
-
 			// 4. Verify the code of authority is either empty or already delegated.
 			let authority_code = state.code(authority.authority);
 			if !authority_code.is_empty() && !Authorization::is_delegated(&authority_code) {
@@ -1461,7 +1460,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 				.record_cost(u64::from(cost))?;
 		} else {
 			let is_static = self.state.metadata().is_static;
-			let (gas_cost, targets, memory_cost) = gasometer::dynamic_opcode_cost(
+			let (gas_cost, memory_cost) = gasometer::dynamic_opcode_cost(
 				*address,
 				opcode,
 				machine.stack(),
@@ -1474,18 +1473,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 				.metadata_mut()
 				.gasometer
 				.record_dynamic_cost(gas_cost, memory_cost)?;
-			// Fetch targete and warm it
-			for target in targets {
-				match target {
-					StorageTarget::Address(address) => {
-						self.state.metadata_mut().access_address(address);
-					}
-					StorageTarget::Slot(address, key) => {
-						self.state.metadata_mut().access_storage(address, key);
-					}
-					StorageTarget::None => (),
-				}
-			}
 		}
 		Ok(())
 	}
@@ -1604,7 +1591,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	}
 
 	/// Return the target address of the authority delegation designation (EIP-7702).
-	fn authority_target(&self, address: H160) -> Option<H160> {
+	fn authority_target(&mut self, address: H160) -> Option<H160> {
 		self.state.authority_target(address)
 	}
 
@@ -1843,6 +1830,18 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 			None
 		}
 	}
+
+	// Warm target according to EIP-2929
+	// It warm up the target address or storage storage. If in the target tuple
+	// the storage is `None` then it's warming up the address.
+	fn warm_target(&mut self, target: (H160, Option<H256>)) {
+		let (address, storage) = target;
+		if let Some(key) = storage {
+			self.state.metadata_mut().access_storage(address, key);
+		} else {
+			self.state.metadata_mut().access_address(address);
+		}
+	}
 }
 
 struct StackExecutorHandle<'inner, 'config, 'precompiles, S, P> {
@@ -1965,7 +1964,7 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 			.refund_external_cost(ref_time, proof_size);
 	}
 
-	/// Retreive the remaining gas.
+	/// Retrieve the remaining gas.
 	fn remaining_gas(&self) -> u64 {
 		self.executor.state.metadata().gasometer.gas()
 	}
@@ -1975,17 +1974,17 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 		Handler::log(self.executor, address, topics, data)
 	}
 
-	/// Retreive the code address (what is the address of the precompile being called).
+	/// Retrieve the code address (what is the address of the precompile being called).
 	fn code_address(&self) -> H160 {
 		self.code_address
 	}
 
-	/// Retreive the input data the precompile is called with.
+	/// Retrieve the input data the precompile is called with.
 	fn input(&self) -> &[u8] {
 		self.input
 	}
 
-	/// Retreive the context in which the precompile is executed.
+	/// Retrieve the context in which the precompile is executed.
 	fn context(&self) -> &Context {
 		self.context
 	}
@@ -1995,7 +1994,7 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 		self.is_static
 	}
 
-	/// Retreive the gas limit of this call.
+	/// Retrieve the gas limit of this call.
 	fn gas_limit(&self) -> Option<u64> {
 		self.gas_limit
 	}

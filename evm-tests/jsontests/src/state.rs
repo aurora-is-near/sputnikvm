@@ -1033,7 +1033,8 @@ fn test_run(
 				continue;
 			}
 		}
-		if name != "tests/prague/eip7702_set_code_tx/test_gas.py::test_account_warming[fork_Prague-state_test-multiple_authorizations_eoa_self_sponsored_then_contract_authority-check_delegated_account_first_False]" {
+		// TODOFEE
+		if name != "tests/prague/eip7702_set_code_tx/test_gas.py::test_self_set_code_cost[fork_Prague-state_test-pre_authorized_True]" {
 			// continue
 		}
 		let (gasometer_config, delete_empty) = match spec {
