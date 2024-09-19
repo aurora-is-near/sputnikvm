@@ -7,8 +7,8 @@ use ethjson::test_helpers::state::PostStateResult;
 use ethjson::uint::Uint;
 use evm::backend::{ApplyBackend, MemoryAccount, MemoryBackend, MemoryVicinity};
 use evm::executor::stack::{
-	MemoryStackState, PrecompileFailure, PrecompileFn, PrecompileOutput, StackExecutor,
-	StackSubstateMetadata,
+	Authorization, MemoryStackState, PrecompileFailure, PrecompileFn, PrecompileOutput,
+	StackExecutor, StackSubstateMetadata,
 };
 use evm::utils::U64_MAX;
 use evm::{Config, Context, ExitError, ExitReason, ExitSucceed};
@@ -1034,8 +1034,8 @@ fn test_run(
 			}
 		}
 		// TODOFEE
-		if name != "tests/prague/eip7702_set_code_tx/test_gas.py::test_self_set_code_cost[fork_Prague-state_test-pre_authorized_True]" {
-			// continue
+		if name != "tests/prague/eip7702_set_code_tx/test_gas.py::test_account_warming[fork_Prague-state_test-pre_authorized_eoa_authority_no_re_authorization_self_sponsored-check_delegated_account_first_True]" {
+			 // continue
 		}
 		let (gasometer_config, delete_empty) = match spec {
 			ForkSpec::Istanbul => (Config::istanbul(), true),
@@ -1125,6 +1125,11 @@ fn test_run(
 		let caller_code = original_state
 			.get(&caller)
 			.map_or_else(Vec::new, |acc| acc.code.clone());
+		// EIP-7702 - check is it delegated designation. If it's delegation designation then
+		// even if `caller_code` is non-empty transaction should be executed.
+		let is_delegated = original_state
+			.get(&caller)
+			.map_or(false, |c| Authorization::is_delegated(&c.code));
 
 		for (i, state) in states.iter().enumerate() {
 			let transaction = test_tx.select(&state.indexes);
@@ -1197,7 +1202,8 @@ fn test_run(
 				.collect();
 
 			// EIP-3607: Reject transactions from senders with deployed code
-			if caller_code.is_empty() {
+			// EIP-7702: Accept transaction even if caller has code.
+			if caller_code.is_empty() || is_delegated {
 				match transaction.to {
 					ethjson::maybe::MaybeEmpty::Some(to) => {
 						let value = transaction.value.into();
