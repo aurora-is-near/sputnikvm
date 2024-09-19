@@ -444,6 +444,13 @@ pub mod transaction {
 				let mut is_valid =
 					auth.chain_id.0 == U256::from(0) || auth.chain_id.0 == vicinity.chain_id;
 				// 2. `authority = ecrecover(keccak(MAGIC || rlp([chain_id, address, nonce])), y_parity, r, s]`
+
+				// Validate the signature, as in tests it is possible to have invalid signatures values.
+				let v = auth.v.0 .0;
+				if !(v[0] < u64::from(u8::MAX) && v[1..4].iter().all(|&elem| elem == 0)) {
+					return Err(InvalidTxReason::InvalidAuthorizationSignature);
+				}
+
 				let auth_address = eip7702::SignedAuthorization::new(
 					auth.chain_id.0,
 					auth.address.0,
@@ -516,6 +523,7 @@ pub mod transaction {
 		GasPriseEip1559,
 		AuthorizationListNotExist,
 		AuthorizationListNotSupported,
+		InvalidAuthorizationSignature,
 	}
 }
 

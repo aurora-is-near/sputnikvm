@@ -1015,7 +1015,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				continue;
 			}
 			// TODOFEE
-			// println!("[5] {}", authority_code.is_empty());
+			//println!("[5] {}", authority_code.is_empty());
 
 			// 6. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter if authority exists in the trie.
 			if !state.is_empty(authority.authority) {
@@ -1035,7 +1035,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				delegated_address_code,
 			);
 			// TODOFEE
-			// println!("PASS");
+			//println!("PASS");
 		}
 		// Warm addresses for [Step 3].
 		self.state
@@ -1043,7 +1043,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			.access_addresses(warm_authority.into_iter());
 
 		// TODOFEE
-		// println!("refunded_accounts: {refunded_accounts}");
+		//println!("refunded_accounts: {refunded_accounts}");
 		self.state
 			.metadata_mut()
 			.gasometer
@@ -1235,7 +1235,24 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		let code = self.code(code_address);
 		// EIP-7702 - get delegated designation address code
-		let code = self.authority_code(code_address, &code).unwrap_or(code);
+		// TODOFEE
+		// let code = self
+		// 	.authority_code(code_address, &code)
+		// 	.map_or(code, |code| {
+		// 		if let Some(target_address) = self.authority_target(code_address) {
+		// 			self.warm_target((target_address, None));
+		// 		}
+		// 		code
+		// 	});
+		let code = self
+			.authority_code(code_address, &code)
+			.and_then(|code| {
+				self.authority_target(code_address).map(|target_address| {
+					self.warm_target((target_address, None));
+					code
+				})
+			})
+			.unwrap_or(code);
 
 		self.enter_substate(gas_limit, is_static);
 		self.state.touch(context.address);
@@ -1839,6 +1856,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		if let Some(key) = storage {
 			self.state.metadata_mut().access_storage(address, key);
 		} else {
+			// TODOFEE
+			// println!("###### WARM {address:?}");
 			self.state.metadata_mut().access_address(address);
 		}
 	}

@@ -1005,6 +1005,20 @@ fn check_validate_exit_reason(
 						check_result,
 						"unexpected exception {exception:?} for BlobVersionedHashesNotSupported for test: [{spec:?}] {name}"
 					);
+				},
+				InvalidTxReason::InvalidAuthorizationSignature => {
+					let check_result = exception == "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for InvalidAuthorizationSignature for test: [{spec:?}] {name}"
+					);
+				 }
+				InvalidTxReason::AuthorizationListNotExist => {
+					 let check_result = exception == "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for AuthorizationListNotExist for test: [{spec:?}] {name}"
+					);
 				}
 				_ => {
 					panic!(
@@ -1034,9 +1048,10 @@ fn test_run(
 			}
 		}
 		// TODOFEE
-		if name != "tests/prague/eip7702_set_code_tx/test_gas.py::test_account_warming[fork_Prague-state_test-pre_authorized_eoa_authority_no_re_authorization_self_sponsored-check_delegated_account_first_True]" {
-			 // continue
+		if name != "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_caller[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-state_test-value_0]" {
+			    //continue;
 		}
+		//println!("### {name}");
 		let (gasometer_config, delete_empty) = match spec {
 			ForkSpec::Istanbul => (Config::istanbul(), true),
 			ForkSpec::Berlin => (Config::berlin(), true),
@@ -1157,7 +1172,7 @@ fn test_run(
 
 			let gas_limit: u64 = transaction.gas_limit.into();
 			let data: Vec<u8> = transaction.data.clone().into();
-
+			//println!("{:?}", state.expect_exception);
 			let valid_tx = crate::utils::transaction::validate(
 				&transaction,
 				test.0.env.gas_limit.0,
@@ -1171,7 +1186,7 @@ fn test_run(
 				state,
 			);
 			// TODOFEE
-			// println!("VALID_TX: {:?}", valid_tx);
+			//println!("VALID_TX: {:?}", valid_tx);
 			// Only execute valid transactions
 			if let Err(err) = &valid_tx {
 				if check_validate_exit_reason(err, &state.expect_exception, name, spec) {
