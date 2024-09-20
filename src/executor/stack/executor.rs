@@ -1513,10 +1513,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 
 	/// Get account code
 	fn code(&self, address: H160) -> Vec<u8> {
-		let code = self.state.code(address);
-		// TODOFEE
-		// println!("## CODE [{address:?}]: {code:?}");
-		code
+		self.state.code(address)
 	}
 
 	/// Get account storage by index
