@@ -85,8 +85,6 @@ pub trait Handler {
 	/// # Errors
 	/// Return `ExitError`
 	fn is_authority_cold(&mut self, address: H160) -> Option<bool>;
-	/// Return the target address of the authority delegation designation (EIP-7702).
-	fn authority_target(&mut self, address: H160) -> Option<H160>;
 
 	/// Set storage value of address at index.
 	///
@@ -181,15 +179,12 @@ pub trait Handler {
 	/// Return `ExitError`
 	fn tload(&mut self, address: H160, index: H256) -> Result<U256, ExitError>;
 
-	/// Get delegation designator ofr the authority code.
-	/// If the code of address is delegation designator, then retrieve code
-	/// from the designation address for the `authority`.
-	///
-	/// It's related to [EIP-7702 Delegation Designation](https://eips.ethereum.org/EIPS/eip-7702#delegation-designation)
-	/// When authority code is found, it should set delegated addres to `authority_access` array for
-	/// calculating additional gas cost. Gas must be charged for the authority address and
-	/// for delegated address, for detection is address warm or cold.
-	fn authority_code(&mut self, authority: H160, code: &[u8]) -> Option<Vec<u8>>;
+	/// Return the target address of the authority delegation designation (EIP-7702).
+	fn get_authority_target(&mut self, address: H160) -> Option<H160>;
+
+	/// Get delegation designator code for the authority code.
+	/// EIP-7702
+	fn authority_code(&mut self, authority: H160) -> Vec<u8>;
 
 	/// Warm target according to EIP-2929
 	fn warm_target(&mut self, target: (H160, Option<H256>));

@@ -146,6 +146,16 @@ pub mod eip7702 {
 	use rlp::RlpStream;
 
 	pub const MAGIC: u8 = 0x5;
+	/// The order of the secp256k1 curve, divided by two. Signatures that should be checked according
+	/// to EIP-2 should have an S value less than or equal to this.
+	///
+	/// `57896044618658097711785492504343953926418782139537452191302581570759080747168`
+	pub const SECP256K1N_HALF: U256 = U256([
+		0xDFE92F46681B20A0,
+		0x5D576E7357A4501D,
+		0xFFFFFFFFFFFFFFFF,
+		0x7FFFFFFFFFFFFFFF,
+	]);
 
 	#[derive(Debug, Clone, PartialEq, Eq)]
 	pub struct Authorization {
@@ -448,6 +458,14 @@ pub mod transaction {
 				// Validate the signature, as in tests it is possible to have invalid signatures values.
 				let v = auth.v.0 .0;
 				if !(v[0] < u64::from(u8::MAX) && v[1..4].iter().all(|&elem| elem == 0)) {
+					return Err(InvalidTxReason::InvalidAuthorizationSignature);
+				}
+				// Value `v` shouldn't be greater then 1
+				if v[0] > 1 {
+					return Err(InvalidTxReason::InvalidAuthorizationSignature);
+				}
+				// EIP-2 valiadtion
+				if auth.s.0 > eip7702::SECP256K1N_HALF {
 					return Err(InvalidTxReason::InvalidAuthorizationSignature);
 				}
 

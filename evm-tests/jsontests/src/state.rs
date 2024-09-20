@@ -1048,10 +1048,10 @@ fn test_run(
 			}
 		}
 		// TODOFEE
-		if name != "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_caller[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-state_test-value_0]" {
-			    //continue;
+		if name != "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_ext_code_on_chain_delegating_set_code[fork_Prague-state_test]" {
+			// continue;
 		}
-		//println!("### {name}");
+		// println!("### {name}");
 		let (gasometer_config, delete_empty) = match spec {
 			ForkSpec::Istanbul => (Config::istanbul(), true),
 			ForkSpec::Berlin => (Config::berlin(), true),
@@ -1172,7 +1172,6 @@ fn test_run(
 
 			let gas_limit: u64 = transaction.gas_limit.into();
 			let data: Vec<u8> = transaction.data.clone().into();
-			//println!("{:?}", state.expect_exception);
 			let valid_tx = crate::utils::transaction::validate(
 				&transaction,
 				test.0.env.gas_limit.0,
@@ -1186,7 +1185,7 @@ fn test_run(
 				state,
 			);
 			// TODOFEE
-			//println!("VALID_TX: {:?}", valid_tx);
+			// println!("VALID_TX: {:?}", valid_tx);
 			// Only execute valid transactions
 			if let Err(err) = &valid_tx {
 				if check_validate_exit_reason(err, &state.expect_exception, name, spec) {
@@ -1233,7 +1232,7 @@ fn test_run(
 							access_list,
 							authorization_list,
 						);
-						// assert_call_exit_exception(&state.expect_exception);
+						assert_call_exit_exception(&state.expect_exception);
 					}
 					ethjson::maybe::MaybeEmpty::None => {
 						let code = data;
@@ -1302,8 +1301,6 @@ fn test_run(
 				.state_mut()
 				.deposit(caller, amount_to_return_for_caller);
 			// TODOFEE
-			// println!("USED: {:?}", executor.used_gas());
-			// println!("REFUND: {amount_to_return_for_caller:?}");
 			// println!("USED: {:?}", executor.used_gas());
 			// println!("REFUND: {amount_to_return_for_caller:?}");
 

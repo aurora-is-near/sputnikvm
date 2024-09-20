@@ -296,7 +296,10 @@ impl<'config> Gasometer<'config> {
 		inner_mut.refunded_gas += gas_refund;
 
 		// NOTE Extended meesage: "Record dynamic cost {gas_cost} - memory_gas {} - gas_refund {}",
-		log_gas!(self, "record_dynamic_cost: {}", gas_cost,);
+		log_gas!(
+			self,
+			"record_dynamic_cost: {gas_cost} - {memory_gas} - {gas_refund}"
+		);
 
 		Ok(())
 	}
@@ -608,7 +611,7 @@ fn get_and_set_warm<H: Handler>(
 	target: H160,
 ) -> Result<(bool, Option<bool>), ExitError> {
 	let mut delegated_designator_is_cold = None;
-	if let Some(authority_target) = handler.authority_target(target) {
+	if let Some(authority_target) = handler.get_authority_target(target) {
 		// TODOFEE
 		// println!("#### authority_target: {authority_target:?}");
 		delegated_designator_is_cold = handler.is_authority_cold(target);
@@ -684,25 +687,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::EXTCODESIZE => {
 			let target = stack.peek_h256(0)?.into();
-			let mut delegated_designator_is_cold = None;
-			if let Some(authority_target) = handler.authority_target(target) {
-				// TODOFEE
-				// println!("#### authority_target: {authority_target:?}");
-				delegated_designator_is_cold = handler.is_authority_cold(target);
-				if delegated_designator_is_cold == Some(true) {
-					// TODOFEE
-					// println!("#### WARM authority_target");
-					handler.warm_target((authority_target, None));
-				}
-			}
-			let target_is_cold = handler.is_cold(target, None)?;
-			if target_is_cold {
-				// TODOFEE
-				// println!("#### WARM target");
-				handler.warm_target((target, None));
-			}
-			// TODOFEE
-			// println!("#### target: {target:?}");
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
 			GasCost::ExtCodeSize {
 				target_is_cold,
 				delegated_designator_is_cold,

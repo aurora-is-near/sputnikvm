@@ -494,20 +494,20 @@ impl<'config> MemoryStackSubstate<'config> {
 		self.tstorages.insert((address, key), value);
 	}
 
-	/// Get authority code from the current state. If it's `None` just take a look
+	/// Get authority target from the current state. If it's `None` just take a look
 	/// recursively in the parent state.
-	fn get_authority_recursive(&self, authority: H160) -> Option<&(H160, Vec<u8>)> {
+	fn get_authority_target_recursive(&self, authority: H160) -> Option<H160> {
 		if let Some(target) = self
 			.metadata
 			.accessed()
 			.as_ref()
-			.and_then(|accessed| accessed.get_authority(authority))
+			.and_then(|accessed| accessed.get_authority_target(authority))
 		{
 			return Some(target);
 		}
 		self.parent
 			.as_ref()
-			.and_then(|p| p.get_authority_recursive(authority))
+			.and_then(|p| p.get_authority_target_recursive(authority))
 	}
 }
 
@@ -694,56 +694,27 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 		Ok(())
 	}
 
-	/// Get delegation designator ofr the authority code.
-	/// If the code of address is delegation designator, then retrieve code
-	/// from the designation address for the `authority`.
-	///
-	/// It's related to [EIP-7702 Delegation Designation](https://eips.ethereum.org/EIPS/eip-7702#delegation-designation)
-	/// When authority code is found, it should set delegated addres to `authority_access` array for
-	/// calculating additional gas cost. Gas must be charged for the authority address and
-	/// for delegated address, for detection is address warm or cold.
-	fn authority_code(&mut self, authority: H160, code: &[u8]) -> Option<Vec<u8>> {
-		// Get code data from the cache
-		if let Some((_, code)) = self.substate.get_authority_recursive(authority) {
-			return Some(code.clone());
-		}
-		// Get code for delegated address
-		if let Some(target) = Authorization::get_delegated_address(code) {
-			let code = self.code(target);
-			// Add to cache
-			self.metadata_mut()
-				.add_authority(authority, target, code.clone());
-			return Some(code);
-		}
-		None
-	}
-
 	/// EIP-7702 - check is authority cold.
 	fn is_authority_cold(&mut self, address: H160) -> Option<bool> {
-		self.authority_target(address)
+		self.get_authority_target(address)
 			.map(|target| self.is_cold(target))
 	}
 
-	/// Get authority target ( EIP-7702).
-	/// First we trying to get authority target from the cache recursively with parent state,
+	/// Get authority target ( EIP-7702) - delegated address.
+	/// First we're trying to get authority target from the cache recursively with parent state,
 	/// if it's not found we get code for the authority address and check if it's delegation
 	/// designator. If it's true, we add result to cache and return delegated target address.
-	fn authority_target(&mut self, authority: H160) -> Option<H160> {
+	fn get_authority_target(&mut self, authority: H160) -> Option<H160> {
 		// Read from cache
-		if let Some(target_address) = self
-			.substate
-			.get_authority_recursive(authority)
-			.map(|(target, _)| *target)
-		{
+		if let Some(target_address) = self.substate.get_authority_target_recursive(authority) {
 			Some(target_address)
 		} else {
 			// If not found in the cache
 			// Get code for delegated address
 			let authority_code = self.code(authority);
 			if let Some(target) = Authorization::get_delegated_address(&authority_code) {
-				let code = self.code(target);
 				// Add to cache
-				self.metadata_mut().add_authority(authority, target, code);
+				self.metadata_mut().add_authority(authority, target);
 				return Some(target);
 			}
 			None
