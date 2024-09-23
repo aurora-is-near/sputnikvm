@@ -1,6 +1,6 @@
 use crate::backend::Backend;
 use crate::executor::stack::precompile::{
-	IsPrecompileResult, PrecompileFailure, PrecompileHandle, PrecompileOutput, PrecompileSet,
+	PrecompileFailure, PrecompileHandle, PrecompileOutput, PrecompileSet,
 };
 use crate::executor::stack::tagged_runtime::{RuntimeKind, TaggedRuntime};
 use crate::gasometer::{self, Gasometer, StorageTarget};
@@ -1338,16 +1338,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 
 	fn is_cold(&mut self, address: H160, maybe_index: Option<H256>) -> bool {
 		match maybe_index {
-			None => {
-				let is_precompile = match self
-					.precompile_set
-					.is_precompile(address, self.state.metadata().gasometer.gas())
-				{
-					IsPrecompileResult::Answer { is_precompile } => is_precompile,
-				};
-
-				!is_precompile && self.state.is_cold(address)
-			}
+			None => !self.precompile_set.is_precompile(address) && self.state.is_cold(address),
 			Some(index) => self.state.is_storage_cold(address, index),
 		}
 	}
