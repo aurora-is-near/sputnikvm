@@ -606,10 +606,7 @@ pub fn static_opcode_cost(opcode: Opcode) -> Option<u32> {
 }
 
 /// Get and set warm address if it's not warmed.
-fn get_and_set_warm<H: Handler>(
-	handler: &mut H,
-	target: H160,
-) -> Result<(bool, Option<bool>), ExitError> {
+fn get_and_set_warm<H: Handler>(handler: &mut H, target: H160) -> (bool, Option<bool>) {
 	let mut delegated_designator_is_cold = None;
 	if let Some(authority_target) = handler.get_authority_target(target) {
 		// TODOFEE
@@ -621,13 +618,13 @@ fn get_and_set_warm<H: Handler>(
 			handler.warm_target((authority_target, None));
 		}
 	}
-	let target_is_cold = handler.is_cold(target, None)?;
+	let target_is_cold = handler.is_cold(target, None);
 	if target_is_cold {
 		// TODOFEE
 		// println!("#### WARM target");
 		handler.warm_target((target, None));
 	}
-	Ok((target_is_cold, delegated_designator_is_cold))
+	(target_is_cold, delegated_designator_is_cold)
 }
 
 /// Calculate the opcode cost.
@@ -687,7 +684,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::EXTCODESIZE => {
 			let target = stack.peek_h256(0)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
 			GasCost::ExtCodeSize {
 				target_is_cold,
 				delegated_designator_is_cold,
@@ -695,7 +692,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		}
 		Opcode::BALANCE => {
 			let target = stack.peek_h256(0)?.into();
-			let target_is_cold = handler.is_cold(target, None)?;
+			let target_is_cold = handler.is_cold(target, None);
 			if target_is_cold {
 				handler.warm_target((target, None));
 			}
@@ -705,7 +702,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::EXTCODEHASH if config.has_ext_code_hash => {
 			let target = stack.peek_h256(0)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
 			GasCost::ExtCodeHash {
 				target_is_cold,
 				delegated_designator_is_cold,
@@ -715,7 +712,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::CALLCODE => {
 			let target = stack.peek_h256(1)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
 			GasCost::CallCode {
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
@@ -729,7 +726,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		}
 		Opcode::STATICCALL => {
 			let target = stack.peek_h256(1)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
 			GasCost::StaticCall {
 				gas: stack.peek(0)?,
 				target_is_cold,
@@ -745,7 +742,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::EXTCODECOPY => {
 			let target = stack.peek_h256(0)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
 			GasCost::ExtCodeCopy {
 				target_is_cold,
 				delegated_designator_is_cold,
@@ -760,7 +757,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::SLOAD => {
 			let index = stack.peek_h256(0)?;
-			let target_is_cold = handler.is_cold(address, Some(index))?;
+			let target_is_cold = handler.is_cold(address, Some(index));
 			if target_is_cold {
 				handler.warm_target((address, Some(index)));
 			}
@@ -769,7 +766,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::DELEGATECALL if config.has_delegate_call => {
 			let target = stack.peek_h256(1)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
 			GasCost::DelegateCall {
 				gas: stack.peek(0)?,
 				target_is_cold,
@@ -791,7 +788,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		Opcode::SSTORE if !is_static => {
 			let index = stack.peek_h256(0)?;
 			let value = stack.peek_h256(1)?;
-			let target_is_cold = handler.is_cold(address, Some(index))?;
+			let target_is_cold = handler.is_cold(address, Some(index));
 			if target_is_cold {
 				handler.warm_target((address, Some(index)));
 			}
@@ -828,7 +825,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::SELFDESTRUCT if !is_static => {
 			let target = stack.peek_h256(0)?.into();
-			let target_is_cold = handler.is_cold(target, None)?;
+			let target_is_cold = handler.is_cold(target, None);
 			if target_is_cold {
 				handler.warm_target((target, None));
 			}
@@ -844,7 +841,7 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		}
 		Opcode::CALL if !is_static || (is_static && stack.peek(2)? == U256::zero()) => {
 			let target = stack.peek_h256(1)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target)?;
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
 			GasCost::Call {
 				value: stack.peek(2)?,
 				gas: stack.peek(0)?,
