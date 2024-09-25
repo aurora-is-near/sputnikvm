@@ -977,14 +977,10 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				continue;
 			}
 
-			// TODOFEE
-			// println!("[4]");
 			// 5. Verify the nonce of authority is equal to nonce.
 			if state.basic(authority.authority).nonce != U256::from(authority.nonce) {
 				continue;
 			}
-			// TODOFEE
-			// println!("[5] {}", authority_code.is_empty());
 
 			// 6. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter if authority exists in the trie.
 			if !state.is_empty(authority.authority) {
@@ -999,16 +995,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			state
 				.metadata_mut()
 				.add_authority(authority.authority, authority.address);
-			// TODOFEE
-			// println!("PASS");
 		}
 		// Warm addresses for [Step 3].
 		self.state
 			.metadata_mut()
 			.access_addresses(warm_authority.into_iter());
 
-		// TODOFEE
-		// println!("refunded_accounts: {refunded_accounts}");
 		self.state
 			.metadata_mut()
 			.gasometer
@@ -1490,11 +1482,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	/// delegated address code size.
 	fn code_size(&mut self, address: H160) -> U256 {
 		let target_code = self.authority_code(address);
-		// TODOFEE
-		// println!(
-		// 	"code_size [{}]: target_code: {target_code:X?}",
-		// 	target_code.len()
-		// );
 		U256::from(target_code.len())
 	}
 
@@ -1506,6 +1493,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	fn code_hash(&mut self, address: H160) -> H256 {
 		if !self.exists(address) {
 			return H256::default();
+		}
+		if let Some(target) = self.get_authority_target(address) {
+			if !self.exists(target) {
+				return H256::default();
+			}
 		}
 		let code = self.authority_code(address);
 		H256::from_slice(Keccak256::digest(code).as_slice())
@@ -1795,16 +1787,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		if !self.config.has_authorization_list {
 			return self.code(authority);
 		}
-		self.get_authority_target(authority)
-			.and_then(|target_address| {
-				// Check is it loop for Delegated designation
-				if self.get_authority_target(target_address).is_some() {
-					None
-				} else {
-					Some(self.code(target_address))
-				}
-			})
-			.unwrap_or_else(|| self.code(authority))
+		// Check is it loop for Delegated designation
+		self.get_authority_target(authority).map_or_else(
+			|| self.code(authority),
+			|target_address| self.code(target_address),
+		)
 	}
 
 	// Warm target according to EIP-2929
@@ -1815,8 +1802,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		if let Some(key) = storage {
 			self.state.metadata_mut().access_storage(address, key);
 		} else {
-			// TODOFEE
-			// println!("###### WARM {address:?}");
 			self.state.metadata_mut().access_address(address);
 		}
 	}
@@ -1850,7 +1835,16 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 		// cost. Not doing so will make the code panic as recording the call stipend
 		// will do an underflow.
 		let target_is_cold = self.executor.is_cold(code_address, None);
-		let delegated_designator_is_cold = self.executor.is_authority_cold(code_address);
+		// let delegated_designator_is_cold = if let Some(target) = self.get_authority_target() {
+		// 	Some(self.executor.is_cold(target, None))
+		// } else {
+		// 	None
+		// };
+		let delegated_designator_is_cold = self
+			.executor
+			.get_authority_target(code_address)
+			.map(|target| self.executor.is_cold(target, None));
+		//let delegated_designator_is_cold = self.executor.is_authority_cold(code_address);
 
 		let gas_cost = gasometer::GasCost::Call {
 			value: transfer.clone().map_or_else(U256::zero, |x| x.value),

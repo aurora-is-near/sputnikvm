@@ -164,6 +164,10 @@ lazy_static! {
 	static ref CANCUN_BUILTINS: BTreeMap<H160, ethcore_builtin::Builtin> = cancun_builtins();
 }
 
+lazy_static! {
+	static ref PRAGUE_BUILTINS: BTreeMap<H160, ethcore_builtin::Builtin> = prague_builtins();
+}
+
 macro_rules! precompile_entry {
 	($map:expr, $builtins:expr, $index:expr) => {
 		let x: PrecompileFn =
@@ -228,7 +232,29 @@ impl JsonPrecompile {
 				precompile_entry!(map, CANCUN_BUILTINS, 0xA);
 				Some(map)
 			}
-			ForkSpec::Prague => Self::precompile(&ForkSpec::Cancun),
+			ForkSpec::Prague => {
+				let mut map = BTreeMap::new();
+				precompile_entry!(map, PRAGUE_BUILTINS, 1);
+				precompile_entry!(map, PRAGUE_BUILTINS, 2);
+				precompile_entry!(map, PRAGUE_BUILTINS, 3);
+				precompile_entry!(map, PRAGUE_BUILTINS, 4);
+				precompile_entry!(map, PRAGUE_BUILTINS, 5);
+				precompile_entry!(map, PRAGUE_BUILTINS, 6);
+				precompile_entry!(map, PRAGUE_BUILTINS, 7);
+				precompile_entry!(map, PRAGUE_BUILTINS, 8);
+				precompile_entry!(map, PRAGUE_BUILTINS, 9);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x0A);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x0B);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x0C);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x0D);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x0E);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x0F);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x10);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x11);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x12);
+				precompile_entry!(map, PRAGUE_BUILTINS, 0x13);
+				Some(map)
+			}
 			_ => None,
 		}
 	}
@@ -509,136 +535,160 @@ fn berlin_builtins() -> BTreeMap<H160, ethcore_builtin::Builtin> {
 }
 
 fn cancun_builtins() -> BTreeMap<H160, ethcore_builtin::Builtin> {
-	use ethjson::spec::builtin::{BuiltinCompat, Linear, Modexp, PricingCompat};
+	use ethjson::spec::builtin::{BuiltinCompat, Linear, PricingCompat};
 
-	let builtins: BTreeMap<Address, BuiltinCompat> = BTreeMap::from([
-		(
-			Address(H160::from_low_u64_be(1)),
-			BuiltinCompat {
-				name: "ecrecover".to_string(),
-				pricing: PricingCompat::Single(Pricing::Linear(Linear {
-					base: 3000,
-					word: 0,
-				})),
-				activate_at: None,
-			},
-		),
-		(
-			Address(H160::from_low_u64_be(2)),
-			BuiltinCompat {
-				name: "sha256".to_string(),
-				pricing: PricingCompat::Single(Pricing::Linear(Linear { base: 60, word: 12 })),
-				activate_at: None,
-			},
-		),
-		(
-			Address(H160::from_low_u64_be(3)),
-			BuiltinCompat {
-				name: "ripemd160".to_string(),
-				pricing: PricingCompat::Single(Pricing::Linear(Linear {
-					base: 600,
-					word: 120,
-				})),
-				activate_at: None,
-			},
-		),
-		(
-			Address(H160::from_low_u64_be(4)),
-			BuiltinCompat {
-				name: "identity".to_string(),
-				pricing: PricingCompat::Single(Pricing::Linear(Linear { base: 15, word: 3 })),
-				activate_at: None,
-			},
-		),
-		(
-			Address(H160::from_low_u64_be(5)),
-			BuiltinCompat {
-				name: "modexp".to_string(),
-				pricing: PricingCompat::Single(Pricing::Modexp(Modexp {
-					divisor: 3,
-					is_eip_2565: true,
-				})),
-				activate_at: Some(Uint(U256::zero())),
-			},
-		),
-		(
-			Address(H160::from_low_u64_be(6)),
-			BuiltinCompat {
-				name: "alt_bn128_add".to_string(),
-				pricing: PricingCompat::Multi(BTreeMap::from([(
-					Uint(U256::zero()),
-					PricingAt {
-						info: Some("EIP 1108 transition".to_string()),
-						price: Pricing::AltBn128ConstOperations(AltBn128ConstOperations {
-							price: 150,
-						}),
-					},
-				)])),
-				activate_at: None,
-			},
-		),
-		(
-			Address(H160::from_low_u64_be(7)),
-			BuiltinCompat {
-				name: "alt_bn128_mul".to_string(),
-				pricing: PricingCompat::Multi(BTreeMap::from([(
-					Uint(U256::zero()),
-					PricingAt {
-						info: Some("EIP 1108 transition".to_string()),
-						price: Pricing::AltBn128ConstOperations(AltBn128ConstOperations {
-							price: 6000,
-						}),
-					},
-				)])),
-				activate_at: None,
-			},
-		),
-		(
-			Address(H160::from_low_u64_be(8)),
-			BuiltinCompat {
-				name: "alt_bn128_pairing".to_string(),
-				pricing: PricingCompat::Multi(BTreeMap::from([(
-					Uint(U256::zero()),
-					PricingAt {
-						info: Some("EIP 1108 transition".to_string()),
-						price: Pricing::AltBn128Pairing(AltBn128Pairing {
-							base: 45000,
-							pair: 34000,
-						}),
-					},
-				)])),
-				activate_at: None,
-			},
-		),
-		(
-			Address(H160::from_low_u64_be(9)),
-			BuiltinCompat {
-				name: "blake2_f".to_string(),
-				pricing: PricingCompat::Single(Pricing::Blake2F { gas_per_round: 1 }),
-				activate_at: Some(Uint(U256::zero())),
-			},
-		),
-		(
-			Address(H160::from_low_u64_be(0xA)),
-			BuiltinCompat {
-				name: "kzg".to_string(),
-				pricing: PricingCompat::Single(Pricing::Linear(Linear {
-					base: 50_000,
-					word: 0,
-				})),
-				activate_at: None,
-			},
-		),
-	]);
-	builtins
-		.into_iter()
-		.map(|(address, builtin)| {
-			(
-				address.into(),
-				ethjson::spec::Builtin::from(builtin).try_into().unwrap(),
-			)
+	let mut builtins = berlin_builtins();
+
+	// let builtins: BTreeMap<Address, BuiltinCompat> = BTreeMap::from([(
+	// 	Address(H160::from_low_u64_be(0xA)),
+	// 	BuiltinCompat {
+	// 		name: "kzg".to_string(),
+	// 		pricing: PricingCompat::Single(Pricing::Linear(Linear {
+	// 			base: 50_000,
+	// 			word: 0,
+	// 		})),
+	// 		activate_at: None,
+	// 	},
+	// )]);
+	builtins.insert(
+		Address(H160::from_low_u64_be(0xA)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "kzg".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
 		})
-		.collect()
+		.try_into()
+		.unwrap(),
+	);
+	builtins
+}
+
+fn prague_builtins() -> BTreeMap<H160, ethcore_builtin::Builtin> {
+	use ethjson::spec::builtin::{BuiltinCompat, Linear, PricingCompat};
+
+	let mut builtins = berlin_builtins();
+	builtins.insert(
+		Address(H160::from_low_u64_be(0xB)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "bls12_381_g1_add".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
+		})
+		.try_into()
+		.unwrap(),
+	);
+	builtins.insert(
+		Address(H160::from_low_u64_be(0xC)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "bls12_381_g1_mul".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
+		})
+		.try_into()
+		.unwrap(),
+	);
+	builtins.insert(
+		Address(H160::from_low_u64_be(0xD)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "bls12_381_g1_multiexp".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
+		})
+		.try_into()
+		.unwrap(),
+	);
+	builtins.insert(
+		Address(H160::from_low_u64_be(0xE)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "bls12_381_g2_add".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
+		})
+		.try_into()
+		.unwrap(),
+	);
+	builtins.insert(
+		Address(H160::from_low_u64_be(0xF)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "bls12_381_g2_mul".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
+		})
+		.try_into()
+		.unwrap(),
+	);
+	builtins.insert(
+		Address(H160::from_low_u64_be(0x10)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "bls12_381_g2_multiexp".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
+		})
+		.try_into()
+		.unwrap(),
+	);
+	builtins.insert(
+		Address(H160::from_low_u64_be(0x11)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "bls12_381_pairing".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
+		})
+		.try_into()
+		.unwrap(),
+	);
+	builtins.insert(
+		Address(H160::from_low_u64_be(0x12)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "bls12_381_fp_to_g1".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
+		})
+		.try_into()
+		.unwrap(),
+	);
+	builtins.insert(
+		Address(H160::from_low_u64_be(0x13)).into(),
+		ethjson::spec::Builtin::from(BuiltinCompat {
+			name: "bls12_381_fp2_to_g2".to_string(),
+			pricing: PricingCompat::Single(Pricing::Linear(Linear {
+				base: 50_000,
+				word: 0,
+			})),
+			activate_at: None,
+		})
+		.try_into()
+		.unwrap(),
+	);
+
+	builtins
 }
 
 pub fn test(
@@ -1047,11 +1097,7 @@ fn test_run(
 				continue;
 			}
 		}
-		// TODOFEE
-		if name != "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_ext_code_on_chain_delegating_set_code[fork_Prague-state_test]" {
-			// continue;
-		}
-		// println!("### {name}");
+
 		let (gasometer_config, delete_empty) = match spec {
 			ForkSpec::Istanbul => (Config::istanbul(), true),
 			ForkSpec::Berlin => (Config::berlin(), true),
@@ -1184,8 +1230,6 @@ fn test_run(
 				spec,
 				state,
 			);
-			// TODOFEE
-			// println!("VALID_TX: {:?}", valid_tx);
 			// Only execute valid transactions
 			if let Err(err) = &valid_tx {
 				if check_validate_exit_reason(err, &state.expect_exception, name, spec) {
@@ -1263,10 +1307,7 @@ fn test_run(
 				if !(*spec >= ForkSpec::Prague
 					&& TxType::from_txbytes(&state.txbytes) == TxType::EOAAccountCode)
 				{
-					// TODO: fix it
-					if *spec < ForkSpec::Prague {
-						assert_empty_create_caller(&state.expect_exception, name);
-					}
+					assert_empty_create_caller(&state.expect_exception, name);
 				}
 			}
 
@@ -1300,9 +1341,6 @@ fn test_run(
 			executor
 				.state_mut()
 				.deposit(caller, amount_to_return_for_caller);
-			// TODOFEE
-			// println!("USED: {:?}", executor.used_gas());
-			// println!("REFUND: {amount_to_return_for_caller:?}");
 
 			let (values, logs) = executor.into_state().deconstruct();
 

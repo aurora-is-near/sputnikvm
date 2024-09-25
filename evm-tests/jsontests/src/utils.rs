@@ -123,7 +123,6 @@ pub fn check_valid_hash(h: &H256, b: &BTreeMap<H160, MemoryAccount>) -> (bool, H
 				code_hash,
 				code_version: U256::zero(),
 			};
-
 			(address, rlp::encode(&account))
 		})
 		.collect::<Vec<_>>();

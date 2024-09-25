@@ -142,9 +142,7 @@ pub fn extcodehash<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Contro
 	Control::Continue
 }
 
-pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	// TODOFEE
-	// println!("extcodecopy");
+pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
 	pop_h256!(runtime, address);
 	pop_u256!(runtime, memory_offset, code_offset, len);
 
@@ -152,8 +150,6 @@ pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H>
 		return Control::Continue;
 	}
 	let len = as_usize_or_fail!(len);
-	// TODOFEE
-	// println!("len {len}");
 
 	// Cast to `usize` after length checking to avoid overflow
 	let memory_offset = as_usize_or_fail!(memory_offset);
@@ -162,13 +158,11 @@ pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H>
 		.machine
 		.memory_mut()
 		.resize_offset(memory_offset, len));
-	// TODOFEE
-	// println!("EXT: {address:?}");
 	match runtime.machine.memory_mut().copy_large(
 		memory_offset,
 		code_offset,
 		len,
-		&handler.code(address.into()),
+		&handler.authority_code(address.into()),
 	) {
 		Ok(()) => (),
 		Err(e) => return Control::Exit(e.into()),

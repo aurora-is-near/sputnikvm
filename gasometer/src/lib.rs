@@ -609,19 +609,13 @@ pub fn static_opcode_cost(opcode: Opcode) -> Option<u32> {
 fn get_and_set_warm<H: Handler>(handler: &mut H, target: H160) -> (bool, Option<bool>) {
 	let mut delegated_designator_is_cold = None;
 	if let Some(authority_target) = handler.get_authority_target(target) {
-		// TODOFEE
-		// println!("#### authority_target: {authority_target:?}");
-		delegated_designator_is_cold = handler.is_authority_cold(target);
+		delegated_designator_is_cold = Some(handler.is_cold(authority_target, None));
 		if delegated_designator_is_cold == Some(true) {
-			// TODOFEE
-			// println!("#### WARM authority_target");
 			handler.warm_target((authority_target, None));
 		}
 	}
 	let target_is_cold = handler.is_cold(target, None);
 	if target_is_cold {
-		// TODOFEE
-		// println!("#### WARM target");
 		handler.warm_target((target, None));
 	}
 	(target_is_cold, delegated_designator_is_cold)

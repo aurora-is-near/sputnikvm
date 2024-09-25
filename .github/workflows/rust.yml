@@ -90,13 +90,12 @@ jobs:
           tar -xzf fixtures_pectra-devnet-3.tar.gz -C ethereum-spec-tests
           tree ethereum-spec-tests/fixtures/state_tests/prague/eip7702_set_code_tx
 
-
       - name: Run Ethereum state tests
         run: |
           cargo run -r -p evm-jsontests -F enable-slow-tests -- state -f \
           ethtests/GeneralStateTests/ \
           ethtests/LegacyTests/Cancun/GeneralStateTests/ \
-          ethereum-spec-tests/fixtures/state_tests/prague/eip7702_set_code_tx/gas
+          ethereum-spec-tests/fixtures/state_tests/prague/eip7702_set_code_tx/
           # Temporally disable as EOFv1 not implemented
           # ethtests/EIPTests/StateTests/
 
