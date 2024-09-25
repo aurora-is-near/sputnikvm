@@ -780,10 +780,10 @@ fn check_create_exit_reason(
 			panic!("Unexpected error: {err:?}")
 		}
 		_ => {
-			// assert!(
-			// 	expect_exception.is_none(),
-			// 	"Unexpected json-test error: {expect_exception:?}"
-			// );
+			assert!(
+				expect_exception.is_none(),
+				"Unexpected json-test error: {expect_exception:?}"
+			);
 		}
 	}
 	false
@@ -1068,6 +1068,13 @@ fn check_validate_exit_reason(
 					assert!(
 						check_result,
 						"unexpected exception {exception:?} for AuthorizationListNotExist for test: [{spec:?}] {name}"
+					);
+				}
+				InvalidTxReason::CreateTransaction => {
+					let check_result =  exception == "TransactionException.TYPE_4_TX_CONTRACT_CREATION";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for CreateTransaction for test: [{spec:?}] {name}"
 					);
 				}
 				_ => {

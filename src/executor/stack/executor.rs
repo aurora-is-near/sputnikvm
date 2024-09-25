@@ -1540,15 +1540,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		}
 	}
 
-	/// Get authority delegated address and `is_cold` status
-	/// EIP-7702
-	fn is_authority_cold(&mut self, address: H160) -> Option<bool> {
-		self.config
-			.has_authorization_list
-			.then(|| self.state.is_authority_cold(address))
-			.flatten()
-	}
-
 	fn gas_left(&self) -> U256 {
 		U256::from(self.state.metadata().gasometer.gas())
 	}
@@ -1771,7 +1762,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 
 	/// Return the target address of the authority delegation designation (EIP-7702).
 	fn get_authority_target(&mut self, address: H160) -> Option<H160> {
-		self.state.get_authority_target(address)
+		if self.config.has_authorization_list {
+			self.state.get_authority_target(address)
+		} else {
+			None
+		}
 	}
 
 	/// Get delegation designator code for the authority code.
@@ -1835,16 +1830,10 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 		// cost. Not doing so will make the code panic as recording the call stipend
 		// will do an underflow.
 		let target_is_cold = self.executor.is_cold(code_address, None);
-		// let delegated_designator_is_cold = if let Some(target) = self.get_authority_target() {
-		// 	Some(self.executor.is_cold(target, None))
-		// } else {
-		// 	None
-		// };
 		let delegated_designator_is_cold = self
 			.executor
 			.get_authority_target(code_address)
 			.map(|target| self.executor.is_cold(target, None));
-		//let delegated_designator_is_cold = self.executor.is_authority_cold(code_address);
 
 		let gas_cost = gasometer::GasCost::Call {
 			value: transfer.clone().map_or_else(U256::zero, |x| x.value),
