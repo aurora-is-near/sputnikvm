@@ -16,6 +16,7 @@ evm-runtime = { version = "0.45.2", path = "runtime", default-features = false }
 primitive-types = { version = "0.12", default-features = false }
 auto_impl = "1.0"
 sha3 = { version = "0.10", default-features = false }
+heapless = "0.8.0"
 
 [dependencies]
 ethereum = { version = "0.15", default-features = false }

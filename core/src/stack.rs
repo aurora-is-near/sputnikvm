@@ -1,30 +1,24 @@
-use crate::prelude::Vec;
 use crate::utils::USIZE_MAX;
 use crate::ExitError;
+use heapless::Vec as ConstVec;
 use primitive_types::{H256, U256};
+
+/// Fixed Stack limit.
+pub const STACK_LIMIT: usize = 1024;
 
 /// EVM stack.
 #[derive(Clone, Debug)]
 pub struct Stack {
-	data: Vec<U256>,
-	limit: usize,
+	data: ConstVec<U256, STACK_LIMIT>,
 }
 
 impl Stack {
 	/// Create a new stack with given limit.
 	#[must_use]
-	pub const fn new(limit: usize) -> Self {
+	pub const fn new(_limit: usize) -> Self {
 		Self {
-			data: Vec::new(),
-			limit,
+			data: ConstVec::new(),
 		}
-	}
-
-	/// Stack limit.
-	#[inline]
-	#[must_use]
-	pub const fn limit(&self) -> usize {
-		self.limit
 	}
 
 	/// Stack length.
@@ -41,25 +35,20 @@ impl Stack {
 		self.data.is_empty()
 	}
 
-	/// Stack data.
-	#[inline]
-	#[must_use]
-	pub const fn data(&self) -> &Vec<U256> {
-		&self.data
-	}
-
 	/// Pop a value from the stack. If the stack is already empty, returns the
 	/// `StackUnderflow` error.
 	///
 	/// # Errors
-	/// Return `ExitError`
+	/// Return `ExitError::StackUnderflow`
 	#[inline]
 	pub fn pop(&mut self) -> Result<U256, ExitError> {
 		self.data.pop().ok_or(ExitError::StackUnderflow)
 	}
 
+	/// Pop `H256` value from the stack.
+	///
 	/// # Errors
-	/// Return `ExitError`
+	/// Return `ExitError::StackUnderflow`
 	#[inline]
 	pub fn pop_h256(&mut self) -> Result<H256, ExitError> {
 		self.pop().map(|it| {
@@ -76,11 +65,10 @@ impl Stack {
 	/// Return `ExitError`
 	#[inline]
 	pub fn push(&mut self, value: U256) -> Result<(), ExitError> {
-		if self.data.len() + 1 > self.limit {
+		if self.data.len() + 1 > STACK_LIMIT {
 			return Err(ExitError::StackOverflow);
 		}
-		self.data.push(value);
-		Ok(())
+		self.data.push(value).map_err(|_| ExitError::StackOverflow)
 	}
 
 	/// Peek a value at given index for the stack, where the top of
@@ -88,7 +76,7 @@ impl Stack {
 	/// `StackError::Underflow` is returned.
 	///
 	/// # Errors
-	/// Return `ExitError`
+	/// Return `ExitError::StackUnderflow`
 	#[inline]
 	pub fn peek(&self, no_from_top: usize) -> Result<U256, ExitError> {
 		if self.data.len() > no_from_top {
@@ -103,8 +91,11 @@ impl Stack {
 	/// the stack is at index `0`. If the index is too large,
 	/// `StackError::Underflow` is returned.
 	///
+	/// # Return
+	/// Returns the value as `H256` from the index.
+	///
 	/// # Errors
-	/// Return `ExitError`
+	/// Return `ExitError::StackUnderflow`
 	pub fn peek_h256(&self, no_from_top: usize) -> Result<H256, ExitError> {
 		self.peek(no_from_top).map(|it| {
 			let mut res = H256([0; 32]);
@@ -117,8 +108,11 @@ impl Stack {
 	///
 	/// If the value is larger than `usize::MAX`, `OutOfGas` error is returned.
 	///
+	///  # Return
+	/// Returns the value as `usize` from the index.
+	///
 	/// # Errors
-	/// Return `ExitError`
+	/// Return `ExitError::OutOfGas` or `ExitError::StackUnderflow`
 	#[inline]
 	pub fn peek_usize(&self, no_from_top: usize) -> Result<usize, ExitError> {
 		let u = self.peek(no_from_top)?;
@@ -133,11 +127,11 @@ impl Stack {
 	/// `StackError::Underflow` is returned.
 	///
 	/// # Errors
-	/// Return `ExitError`
+	/// Return `ExitError::StackUnderflow`
 	#[inline]
 	pub fn set(&mut self, no_from_top: usize, val: U256) -> Result<(), ExitError> {
-		if self.data.len() > no_from_top {
-			let len = self.data.len();
+		let len = self.data.len();
+		if len > no_from_top {
 			self.data[len - no_from_top - 1] = val;
 			Ok(())
 		} else {
