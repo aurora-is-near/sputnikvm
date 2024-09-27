@@ -35,6 +35,11 @@ impl Stack {
 		self.data.is_empty()
 	}
 
+	#[must_use]
+	pub const fn data(&self) -> &ConstVec<U256, STACK_LIMIT> {
+		&self.data
+	}
+
 	/// Pop a value from the stack. If the stack is already empty, returns the
 	/// `StackUnderflow` error.
 	///
