@@ -88,7 +88,7 @@ impl Stack {
 	/// Return `ExitError::StackUnderflow`
 	#[inline]
 	pub fn peek(&self, no_from_top: usize) -> Result<U256, ExitError> {
-		self.data.peek(no_from_top)?.ok_or(ExitError::OutOfGas)
+		self.data.peek(no_from_top).ok_or(ExitError::OutOfGas)
 	}
 
 	#[inline]
@@ -196,20 +196,34 @@ impl<const N: usize> SegmentedStack<N> {
 
 	#[inline]
 	fn push(&mut self, value: U256) -> Result<(), ExitError> {
-		if self.index >= self.limit {
-			return Err(ExitError::StackOverflow);
-		}
-
-		if self.index < 10 {
-			self.segment_1.get_or_insert_with(|| [U256::zero(); N])[self.index] = value;
-		} else if self.index < 20 {
-			self.segment_2.get_or_insert_with(|| [U256::zero(); N])[self.index] = value;
-		} else if self.index < 30 {
-			self.segment_3.get_or_insert_with(|| [U256::zero(); N])[self.index] = value;
-		}
-
+		self.set_at_index(self.index, value)?;
 		self.index += 1;
 		Ok(())
+	}
+
+	#[inline]
+	fn set_at_index(&mut self, target_index: usize, value: U256) -> Result<(), ExitError> {
+		match target_index {
+			i if i < N => self.segment_1.get_or_insert_with(|| [U256::zero(); N])[i] = value,
+			i if i < N * 2 => {
+				self.segment_2.get_or_insert_with(|| [U256::zero(); N])[i - N] = value;
+			}
+			i if i < N * 3 => {
+				self.segment_3.get_or_insert_with(|| [U256::zero(); N])[i - N * 2] = value;
+			}
+			_ => return Err(ExitError::StackOverflow),
+		}
+		Ok(())
+	}
+
+	#[inline]
+	fn get_on_index(&self, target_index: usize) -> Option<U256> {
+		match target_index {
+			i if i < N => self.segment_1.as_ref().map(|segment| segment[i]),
+			i if i < N * 2 => self.segment_2.as_ref().map(|segment| segment[i - N]),
+			i if i < N * 3 => self.segment_3.as_ref().map(|segment| segment[i - N * 2]),
+			_ => None,
+		}
 	}
 
 	#[inline]
@@ -217,72 +231,36 @@ impl<const N: usize> SegmentedStack<N> {
 		if self.index == 0 {
 			return None;
 		}
-
 		self.index -= 1;
-
-		if self.index < 10 {
-			self.segment_1.as_ref().map(|segment| segment[self.index])
-		} else if self.index < 20 {
-			self.segment_2
-				.as_ref()
-				.map(|segment| segment[self.index - 10])
-		} else {
-			self.segment_3
-				.as_ref()
-				.map(|segment| segment[self.index - 20])
-		}
+		self.get_on_index(self.index)
 	}
 
 	fn set(&mut self, no_from_top: usize, value: U256) -> Result<(), ExitError> {
 		if no_from_top >= self.index {
 			return Err(ExitError::StackUnderflow);
 		}
-
 		let target_index = self.index - no_from_top - 1;
-		if target_index < 10 {
-			self.segment_1.get_or_insert_with(|| [U256::zero(); N])[self.index] = value;
-		} else if target_index < 20 {
-			self.segment_2.get_or_insert_with(|| [U256::zero(); N])[self.index - 10] = value;
-		} else if target_index < 30 {
-			self.segment_3.get_or_insert_with(|| [U256::zero(); N])[self.index - 20] = value;
-		}
+		self.set_at_index(target_index, value)?;
 		Ok(())
 	}
 
-	fn peek(&self, no_from_top: usize) -> Result<Option<U256>, ExitError> {
+	fn peek(&self, no_from_top: usize) -> Option<U256> {
 		if no_from_top >= self.index {
-			return Err(ExitError::StackUnderflow);
+			return None;
 		}
-
 		let target_index = self.index - no_from_top - 1;
-		let res = if target_index < 10 {
-			self.segment_1.as_ref().map(|segment| segment[target_index])
-		} else if target_index < 20 {
-			self.segment_1.as_ref().map(|segment| segment[target_index])
-		} else if target_index < 30 {
-			self.segment_1.as_ref().map(|segment| segment[target_index])
-		} else {
-			return Err(ExitError::OutOfGas);
-		};
-		Ok(res)
+		self.get_on_index(target_index)
 	}
 
 	fn get_data(&self) -> Vec<U256> {
 		let mut data = Vec::new();
-		if let Some(ref segment) = self.segment_1 {
-			let len = self.index.min(10);
-			data.extend_from_slice(&segment[0..len]);
-		}
-		if self.index > 10 {
-			if let Some(ref segment) = self.segment_2 {
-				let len = (self.index - 10).min(10);
-				data.extend_from_slice(&segment[0..len]);
-			}
-		}
-		if self.index > 20 {
-			if let Some(ref segment) = self.segment_3 {
-				let len = (self.index - 20).min(10);
-				data.extend_from_slice(&segment[0..len]);
+		let segments = [&self.segment_1, &self.segment_2, &self.segment_3];
+		for (i, segment) in segments.iter().enumerate() {
+			if let Some(ref segment) = segment {
+				let len = (self.index - i * N).min(N);
+				if len > 0 {
+					data.extend_from_slice(&segment[0..len]);
+				}
 			}
 		}
 
