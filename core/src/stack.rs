@@ -88,7 +88,7 @@ impl Stack {
 	/// Return `ExitError::StackUnderflow`
 	#[inline]
 	pub fn peek(&self, no_from_top: usize) -> Result<U256, ExitError> {
-		self.data.peek(no_from_top).ok_or(ExitError::OutOfGas)
+		self.data.peek(no_from_top).ok_or(ExitError::StackUnderflow)
 	}
 
 	#[inline]
@@ -211,6 +211,57 @@ impl<const N: usize> SegmentedStack<N> {
 			i if i < N * 3 => {
 				self.segment_3.get_or_insert_with(|| [U256::zero(); N])[i - N * 2] = value;
 			}
+			i if i < N * 4 => {
+				self.segment_4.get_or_insert_with(|| [U256::zero(); N])[i - N * 3] = value;
+			}
+			i if i < N * 5 => {
+				self.segment_5.get_or_insert_with(|| [U256::zero(); N])[i - N * 4] = value;
+			}
+			i if i < N * 6 => {
+				self.segment_6.get_or_insert_with(|| [U256::zero(); N])[i - N * 5] = value;
+			}
+			i if i < N * 7 => {
+				self.segment_7.get_or_insert_with(|| [U256::zero(); N])[i - N * 6] = value;
+			}
+			i if i < N * 8 => {
+				self.segment_8.get_or_insert_with(|| [U256::zero(); N])[i - N * 7] = value;
+			}
+			i if i < N * 9 => {
+				self.segment_9.get_or_insert_with(|| [U256::zero(); N])[i - N * 8] = value;
+			}
+			i if i < N * 10 => {
+				self.segment_10.get_or_insert_with(|| [U256::zero(); N])[i - N * 9] = value;
+			}
+			i if i < N * 11 => {
+				self.segment_11.get_or_insert_with(|| [U256::zero(); N])[i - N * 10] = value;
+			}
+			i if i < N * 12 => {
+				self.segment_12.get_or_insert_with(|| [U256::zero(); N])[i - N * 11] = value;
+			}
+			i if i < N * 13 => {
+				self.segment_13.get_or_insert_with(|| [U256::zero(); N])[i - N * 12] = value;
+			}
+			i if i < N * 14 => {
+				self.segment_14.get_or_insert_with(|| [U256::zero(); N])[i - N * 13] = value;
+			}
+			i if i < N * 15 => {
+				self.segment_15.get_or_insert_with(|| [U256::zero(); N])[i - N * 14] = value;
+			}
+			i if i < N * 16 => {
+				self.segment_16.get_or_insert_with(|| [U256::zero(); N])[i - N * 15] = value;
+			}
+			i if i < N * 17 => {
+				self.segment_17.get_or_insert_with(|| [U256::zero(); N])[i - N * 16] = value;
+			}
+			i if i < N * 18 => {
+				self.segment_18.get_or_insert_with(|| [U256::zero(); N])[i - N * 17] = value;
+			}
+			i if i < N * 19 => {
+				self.segment_19.get_or_insert_with(|| [U256::zero(); N])[i - N * 18] = value;
+			}
+			i if i < N * 20 => {
+				self.segment_20.get_or_insert_with(|| [U256::zero(); N])[i - N * 19] = value;
+			}
 			_ => return Err(ExitError::StackOverflow),
 		}
 		Ok(())
@@ -222,6 +273,23 @@ impl<const N: usize> SegmentedStack<N> {
 			i if i < N => self.segment_1.as_ref().map(|segment| segment[i]),
 			i if i < N * 2 => self.segment_2.as_ref().map(|segment| segment[i - N]),
 			i if i < N * 3 => self.segment_3.as_ref().map(|segment| segment[i - N * 2]),
+			i if i < N * 4 => self.segment_4.as_ref().map(|segment| segment[i - N * 3]),
+			i if i < N * 5 => self.segment_5.as_ref().map(|segment| segment[i - N * 4]),
+			i if i < N * 6 => self.segment_6.as_ref().map(|segment| segment[i - N * 5]),
+			i if i < N * 7 => self.segment_7.as_ref().map(|segment| segment[i - N * 6]),
+			i if i < N * 8 => self.segment_8.as_ref().map(|segment| segment[i - N * 7]),
+			i if i < N * 9 => self.segment_9.as_ref().map(|segment| segment[i - N * 8]),
+			i if i < N * 10 => self.segment_10.as_ref().map(|segment| segment[i - N * 9]),
+			i if i < N * 11 => self.segment_11.as_ref().map(|segment| segment[i - N * 10]),
+			i if i < N * 12 => self.segment_12.as_ref().map(|segment| segment[i - N * 11]),
+			i if i < N * 13 => self.segment_13.as_ref().map(|segment| segment[i - N * 12]),
+			i if i < N * 14 => self.segment_14.as_ref().map(|segment| segment[i - N * 13]),
+			i if i < N * 15 => self.segment_15.as_ref().map(|segment| segment[i - N * 14]),
+			i if i < N * 16 => self.segment_16.as_ref().map(|segment| segment[i - N * 15]),
+			i if i < N * 17 => self.segment_17.as_ref().map(|segment| segment[i - N * 16]),
+			i if i < N * 18 => self.segment_18.as_ref().map(|segment| segment[i - N * 17]),
+			i if i < N * 19 => self.segment_19.as_ref().map(|segment| segment[i - N * 18]),
+			i if i < N * 20 => self.segment_20.as_ref().map(|segment| segment[i - N * 19]),
 			_ => None,
 		}
 	}
@@ -254,7 +322,28 @@ impl<const N: usize> SegmentedStack<N> {
 
 	fn get_data(&self) -> Vec<U256> {
 		let mut data = Vec::new();
-		let segments = [&self.segment_1, &self.segment_2, &self.segment_3];
+		let segments = [
+			&self.segment_1,
+			&self.segment_2,
+			&self.segment_3,
+			&self.segment_4,
+			&self.segment_5,
+			&self.segment_6,
+			&self.segment_7,
+			&self.segment_8,
+			&self.segment_9,
+			&self.segment_10,
+			&self.segment_11,
+			&self.segment_12,
+			&self.segment_13,
+			&self.segment_14,
+			&self.segment_15,
+			&self.segment_16,
+			&self.segment_17,
+			&self.segment_18,
+			&self.segment_19,
+			&self.segment_20,
+		];
 		for (i, segment) in segments.iter().enumerate() {
 			if let Some(ref segment) = segment {
 				let len = (self.index - i * N).min(N);
