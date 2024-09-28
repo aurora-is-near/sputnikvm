@@ -10,7 +10,6 @@ repository.workspace = true
 
 [dependencies]
 primitive-types.workspace = true
-heapless.workspace = true
 
 # Optional
 log = { version = "0.4", optional = true }

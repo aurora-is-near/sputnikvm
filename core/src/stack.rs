@@ -1,6 +1,5 @@
 use crate::utils::USIZE_MAX;
-use crate::ExitError;
-use heapless::Vec as ConstVec;
+use crate::{ExitError, Vec};
 use primitive_types::{H256, U256};
 
 /// Fixed Stack limit.
@@ -9,35 +8,40 @@ pub const STACK_LIMIT: usize = 1024;
 /// EVM stack.
 #[derive(Clone, Debug)]
 pub struct Stack {
-	data: ConstVec<U256, STACK_LIMIT>,
+	data: SegmentedStack<10>,
 }
 
 impl Stack {
 	/// Create a new stack with given limit.
 	#[must_use]
-	pub const fn new(_limit: usize) -> Self {
+	pub const fn new(limit: usize) -> Self {
 		Self {
-			data: ConstVec::new(),
+			data: SegmentedStack::new(limit),
 		}
 	}
 
 	/// Stack length.
 	#[inline]
 	#[must_use]
-	pub fn len(&self) -> usize {
-		self.data.len()
+	pub const fn len(&self) -> usize {
+		self.data.get_length()
 	}
 
 	/// Whether the stack is empty.
 	#[inline]
 	#[must_use]
-	pub fn is_empty(&self) -> bool {
-		self.data.is_empty()
+	pub const fn is_empty(&self) -> bool {
+		self.data.get_length() == 0
 	}
 
 	#[must_use]
-	pub const fn data(&self) -> &ConstVec<U256, STACK_LIMIT> {
-		&self.data
+	pub const fn get_limit(&self) -> usize {
+		self.data.get_limit()
+	}
+
+	#[must_use]
+	pub fn data(&self) -> Vec<U256> {
+		self.data.get_data()
 	}
 
 	/// Pop a value from the stack. If the stack is already empty, returns the
@@ -70,7 +74,7 @@ impl Stack {
 	/// Return `ExitError`
 	#[inline]
 	pub fn push(&mut self, value: U256) -> Result<(), ExitError> {
-		if self.data.len() + 1 > STACK_LIMIT {
+		if self.len() + 1 > STACK_LIMIT {
 			return Err(ExitError::StackOverflow);
 		}
 		self.data.push(value).map_err(|_| ExitError::StackOverflow)
@@ -84,11 +88,7 @@ impl Stack {
 	/// Return `ExitError::StackUnderflow`
 	#[inline]
 	pub fn peek(&self, no_from_top: usize) -> Result<U256, ExitError> {
-		if self.data.len() > no_from_top {
-			Ok(self.data[self.data.len() - no_from_top - 1])
-		} else {
-			Err(ExitError::StackUnderflow)
-		}
+		self.data.peek(no_from_top)?.ok_or(ExitError::OutOfGas)
 	}
 
 	#[inline]
@@ -135,12 +135,167 @@ impl Stack {
 	/// Return `ExitError::StackUnderflow`
 	#[inline]
 	pub fn set(&mut self, no_from_top: usize, val: U256) -> Result<(), ExitError> {
-		let len = self.data.len();
-		if len > no_from_top {
-			self.data[len - no_from_top - 1] = val;
-			Ok(())
-		} else {
-			Err(ExitError::StackUnderflow)
+		self.data.set(no_from_top, val)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SegmentedStack<const N: usize> {
+	index: usize,
+	limit: usize,
+	segment_1: Option<[U256; N]>,
+	segment_2: Option<[U256; N]>,
+	segment_3: Option<[U256; N]>,
+	segment_4: Option<[U256; N]>,
+	segment_5: Option<[U256; N]>,
+	segment_6: Option<[U256; N]>,
+	segment_7: Option<[U256; N]>,
+	segment_8: Option<[U256; N]>,
+	segment_9: Option<[U256; N]>,
+	segment_10: Option<[U256; N]>,
+	segment_11: Option<[U256; N]>,
+	segment_12: Option<[U256; N]>,
+	segment_13: Option<[U256; N]>,
+	segment_14: Option<[U256; N]>,
+	segment_15: Option<[U256; N]>,
+	segment_16: Option<[U256; N]>,
+	segment_17: Option<[U256; N]>,
+	segment_18: Option<[U256; N]>,
+	segment_19: Option<[U256; N]>,
+	segment_20: Option<[U256; N]>,
+}
+
+impl<const N: usize> SegmentedStack<N> {
+	#[must_use]
+	pub const fn new(limit: usize) -> Self {
+		Self {
+			index: 0,
+			limit,
+			segment_1: None,
+			segment_2: None,
+			segment_3: None,
+			segment_4: None,
+			segment_5: None,
+			segment_6: None,
+			segment_7: None,
+			segment_8: None,
+			segment_9: None,
+			segment_10: None,
+			segment_11: None,
+			segment_12: None,
+			segment_13: None,
+			segment_14: None,
+			segment_15: None,
+			segment_16: None,
+			segment_17: None,
+			segment_18: None,
+			segment_19: None,
+			segment_20: None,
 		}
+	}
+
+	#[inline]
+	fn push(&mut self, value: U256) -> Result<(), ExitError> {
+		if self.index >= self.limit {
+			return Err(ExitError::StackOverflow);
+		}
+
+		if self.index < 10 {
+			self.segment_1.get_or_insert_with(|| [U256::zero(); N])[self.index] = value;
+		} else if self.index < 20 {
+			self.segment_2.get_or_insert_with(|| [U256::zero(); N])[self.index] = value;
+		} else if self.index < 30 {
+			self.segment_3.get_or_insert_with(|| [U256::zero(); N])[self.index] = value;
+		}
+
+		self.index += 1;
+		Ok(())
+	}
+
+	#[inline]
+	fn pop(&mut self) -> Option<U256> {
+		if self.index == 0 {
+			return None;
+		}
+
+		self.index -= 1;
+
+		if self.index < 10 {
+			self.segment_1.as_ref().map(|segment| segment[self.index])
+		} else if self.index < 20 {
+			self.segment_2
+				.as_ref()
+				.map(|segment| segment[self.index - 10])
+		} else {
+			self.segment_3
+				.as_ref()
+				.map(|segment| segment[self.index - 20])
+		}
+	}
+
+	fn set(&mut self, no_from_top: usize, value: U256) -> Result<(), ExitError> {
+		if no_from_top >= self.index {
+			return Err(ExitError::StackUnderflow);
+		}
+
+		let target_index = self.index - no_from_top - 1;
+		if target_index < 10 {
+			self.segment_1.get_or_insert_with(|| [U256::zero(); N])[self.index] = value;
+		} else if target_index < 20 {
+			self.segment_2.get_or_insert_with(|| [U256::zero(); N])[self.index - 10] = value;
+		} else if target_index < 30 {
+			self.segment_3.get_or_insert_with(|| [U256::zero(); N])[self.index - 20] = value;
+		}
+		Ok(())
+	}
+
+	fn peek(&self, no_from_top: usize) -> Result<Option<U256>, ExitError> {
+		if no_from_top >= self.index {
+			return Err(ExitError::StackUnderflow);
+		}
+
+		let target_index = self.index - no_from_top - 1;
+		let res = if target_index < 10 {
+			self.segment_1.as_ref().map(|segment| segment[target_index])
+		} else if target_index < 20 {
+			self.segment_1.as_ref().map(|segment| segment[target_index])
+		} else if target_index < 30 {
+			self.segment_1.as_ref().map(|segment| segment[target_index])
+		} else {
+			return Err(ExitError::OutOfGas);
+		};
+		Ok(res)
+	}
+
+	fn get_data(&self) -> Vec<U256> {
+		let mut data = Vec::new();
+		if let Some(ref segment) = self.segment_1 {
+			let len = self.index.min(10);
+			data.extend_from_slice(&segment[0..len]);
+		}
+		if self.index > 10 {
+			if let Some(ref segment) = self.segment_2 {
+				let len = (self.index - 10).min(10);
+				data.extend_from_slice(&segment[0..len]);
+			}
+		}
+		if self.index > 20 {
+			if let Some(ref segment) = self.segment_3 {
+				let len = (self.index - 20).min(10);
+				data.extend_from_slice(&segment[0..len]);
+			}
+		}
+
+		data
+	}
+
+	#[inline]
+	const fn get_length(&self) -> usize {
+		self.index
+	}
+
+	#[inline]
+	const fn get_limit(&self) -> usize {
+		self.limit
 	}
 }
