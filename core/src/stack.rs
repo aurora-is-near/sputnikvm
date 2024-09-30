@@ -8,7 +8,7 @@ pub const STACK_LIMIT: usize = 1024;
 /// EVM stack.
 #[derive(Clone, Debug)]
 pub struct Stack {
-	data: SegmentedStack<10>,
+	data: SegmentedStack<1>,
 }
 
 impl Stack {
