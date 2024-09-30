@@ -163,6 +163,36 @@ pub struct SegmentedStack<const N: usize> {
 	segment_18: Option<[U256; N]>,
 	segment_19: Option<[U256; N]>,
 	segment_20: Option<[U256; N]>,
+	segment_21: Option<[U256; N]>,
+	segment_22: Option<[U256; N]>,
+	segment_23: Option<[U256; N]>,
+	segment_24: Option<[U256; N]>,
+	segment_25: Option<[U256; N]>,
+	segment_26: Option<[U256; N]>,
+	segment_27: Option<[U256; N]>,
+	segment_28: Option<[U256; N]>,
+	segment_29: Option<[U256; N]>,
+	segment_30: Option<[U256; N]>,
+	segment_31: Option<[U256; N]>,
+	segment_32: Option<[U256; N]>,
+	segment_33: Option<[U256; N]>,
+	segment_34: Option<[U256; N]>,
+	segment_35: Option<[U256; N]>,
+	segment_36: Option<[U256; N]>,
+	segment_37: Option<[U256; N]>,
+	segment_38: Option<[U256; N]>,
+	segment_39: Option<[U256; N]>,
+	segment_40: Option<[U256; N]>,
+	segment_41: Option<[U256; N]>,
+	segment_42: Option<[U256; N]>,
+	segment_43: Option<[U256; N]>,
+	segment_44: Option<[U256; N]>,
+	segment_45: Option<[U256; N]>,
+	segment_46: Option<[U256; N]>,
+	segment_47: Option<[U256; N]>,
+	segment_48: Option<[U256; N]>,
+	segment_49: Option<[U256; N]>,
+	segment_50: Option<[U256; N]>,
 }
 
 impl<const N: usize> SegmentedStack<N> {
@@ -191,6 +221,36 @@ impl<const N: usize> SegmentedStack<N> {
 			segment_18: None,
 			segment_19: None,
 			segment_20: None,
+			segment_21: None,
+			segment_22: None,
+			segment_23: None,
+			segment_24: None,
+			segment_25: None,
+			segment_26: None,
+			segment_27: None,
+			segment_28: None,
+			segment_29: None,
+			segment_30: None,
+			segment_31: None,
+			segment_32: None,
+			segment_33: None,
+			segment_34: None,
+			segment_35: None,
+			segment_36: None,
+			segment_37: None,
+			segment_38: None,
+			segment_39: None,
+			segment_40: None,
+			segment_41: None,
+			segment_42: None,
+			segment_43: None,
+			segment_44: None,
+			segment_45: None,
+			segment_46: None,
+			segment_47: None,
+			segment_48: None,
+			segment_49: None,
+			segment_50: None,
 		}
 	}
 
@@ -201,6 +261,7 @@ impl<const N: usize> SegmentedStack<N> {
 		Ok(())
 	}
 
+	#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 	#[inline]
 	fn set_at_index(&mut self, target_index: usize, value: U256) -> Result<(), ExitError> {
 		match target_index {
@@ -262,11 +323,102 @@ impl<const N: usize> SegmentedStack<N> {
 			i if i < N * 20 => {
 				self.segment_20.get_or_insert_with(|| [U256::zero(); N])[i - N * 19] = value;
 			}
+			i if i < N * 21 => {
+				self.segment_21.get_or_insert_with(|| [U256::zero(); N])[i - N * 20] = value;
+			}
+			i if i < N * 22 => {
+				self.segment_22.get_or_insert_with(|| [U256::zero(); N])[i - N * 21] = value;
+			}
+			i if i < N * 23 => {
+				self.segment_23.get_or_insert_with(|| [U256::zero(); N])[i - N * 22] = value;
+			}
+			i if i < N * 24 => {
+				self.segment_24.get_or_insert_with(|| [U256::zero(); N])[i - N * 23] = value;
+			}
+			i if i < N * 25 => {
+				self.segment_25.get_or_insert_with(|| [U256::zero(); N])[i - N * 24] = value;
+			}
+			i if i < N * 26 => {
+				self.segment_26.get_or_insert_with(|| [U256::zero(); N])[i - N * 25] = value;
+			}
+			i if i < N * 27 => {
+				self.segment_27.get_or_insert_with(|| [U256::zero(); N])[i - N * 26] = value;
+			}
+			i if i < N * 28 => {
+				self.segment_28.get_or_insert_with(|| [U256::zero(); N])[i - N * 27] = value;
+			}
+			i if i < N * 29 => {
+				self.segment_29.get_or_insert_with(|| [U256::zero(); N])[i - N * 28] = value;
+			}
+			i if i < N * 30 => {
+				self.segment_30.get_or_insert_with(|| [U256::zero(); N])[i - N * 29] = value;
+			}
+			i if i < N * 31 => {
+				self.segment_31.get_or_insert_with(|| [U256::zero(); N])[i - N * 30] = value;
+			}
+			i if i < N * 32 => {
+				self.segment_32.get_or_insert_with(|| [U256::zero(); N])[i - N * 31] = value;
+			}
+			i if i < N * 33 => {
+				self.segment_33.get_or_insert_with(|| [U256::zero(); N])[i - N * 32] = value;
+			}
+			i if i < N * 34 => {
+				self.segment_34.get_or_insert_with(|| [U256::zero(); N])[i - N * 33] = value;
+			}
+			i if i < N * 35 => {
+				self.segment_35.get_or_insert_with(|| [U256::zero(); N])[i - N * 34] = value;
+			}
+			i if i < N * 36 => {
+				self.segment_36.get_or_insert_with(|| [U256::zero(); N])[i - N * 35] = value;
+			}
+			i if i < N * 37 => {
+				self.segment_37.get_or_insert_with(|| [U256::zero(); N])[i - N * 36] = value;
+			}
+			i if i < N * 38 => {
+				self.segment_38.get_or_insert_with(|| [U256::zero(); N])[i - N * 37] = value;
+			}
+			i if i < N * 39 => {
+				self.segment_39.get_or_insert_with(|| [U256::zero(); N])[i - N * 38] = value;
+			}
+			i if i < N * 40 => {
+				self.segment_40.get_or_insert_with(|| [U256::zero(); N])[i - N * 39] = value;
+			}
+			i if i < N * 41 => {
+				self.segment_41.get_or_insert_with(|| [U256::zero(); N])[i - N * 40] = value;
+			}
+			i if i < N * 42 => {
+				self.segment_42.get_or_insert_with(|| [U256::zero(); N])[i - N * 41] = value;
+			}
+			i if i < N * 43 => {
+				self.segment_43.get_or_insert_with(|| [U256::zero(); N])[i - N * 42] = value;
+			}
+			i if i < N * 44 => {
+				self.segment_44.get_or_insert_with(|| [U256::zero(); N])[i - N * 43] = value;
+			}
+			i if i < N * 45 => {
+				self.segment_45.get_or_insert_with(|| [U256::zero(); N])[i - N * 44] = value;
+			}
+			i if i < N * 46 => {
+				self.segment_46.get_or_insert_with(|| [U256::zero(); N])[i - N * 45] = value;
+			}
+			i if i < N * 47 => {
+				self.segment_47.get_or_insert_with(|| [U256::zero(); N])[i - N * 46] = value;
+			}
+			i if i < N * 48 => {
+				self.segment_48.get_or_insert_with(|| [U256::zero(); N])[i - N * 47] = value;
+			}
+			i if i < N * 49 => {
+				self.segment_49.get_or_insert_with(|| [U256::zero(); N])[i - N * 48] = value;
+			}
+			i if i < N * 50 => {
+				self.segment_50.get_or_insert_with(|| [U256::zero(); N])[i - N * 49] = value;
+			}
 			_ => return Err(ExitError::StackOverflow),
 		}
 		Ok(())
 	}
 
+	#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 	#[inline]
 	fn get_on_index(&self, target_index: usize) -> Option<U256> {
 		match target_index {
@@ -290,6 +442,36 @@ impl<const N: usize> SegmentedStack<N> {
 			i if i < N * 18 => self.segment_18.as_ref().map(|segment| segment[i - N * 17]),
 			i if i < N * 19 => self.segment_19.as_ref().map(|segment| segment[i - N * 18]),
 			i if i < N * 20 => self.segment_20.as_ref().map(|segment| segment[i - N * 19]),
+			i if i < N * 21 => self.segment_21.as_ref().map(|segment| segment[i - N * 20]),
+			i if i < N * 22 => self.segment_22.as_ref().map(|segment| segment[i - N * 21]),
+			i if i < N * 23 => self.segment_23.as_ref().map(|segment| segment[i - N * 22]),
+			i if i < N * 24 => self.segment_24.as_ref().map(|segment| segment[i - N * 23]),
+			i if i < N * 25 => self.segment_25.as_ref().map(|segment| segment[i - N * 24]),
+			i if i < N * 26 => self.segment_26.as_ref().map(|segment| segment[i - N * 25]),
+			i if i < N * 27 => self.segment_27.as_ref().map(|segment| segment[i - N * 26]),
+			i if i < N * 28 => self.segment_28.as_ref().map(|segment| segment[i - N * 27]),
+			i if i < N * 29 => self.segment_29.as_ref().map(|segment| segment[i - N * 28]),
+			i if i < N * 30 => self.segment_30.as_ref().map(|segment| segment[i - N * 29]),
+			i if i < N * 31 => self.segment_31.as_ref().map(|segment| segment[i - N * 30]),
+			i if i < N * 32 => self.segment_32.as_ref().map(|segment| segment[i - N * 31]),
+			i if i < N * 33 => self.segment_33.as_ref().map(|segment| segment[i - N * 32]),
+			i if i < N * 34 => self.segment_34.as_ref().map(|segment| segment[i - N * 33]),
+			i if i < N * 35 => self.segment_35.as_ref().map(|segment| segment[i - N * 34]),
+			i if i < N * 36 => self.segment_36.as_ref().map(|segment| segment[i - N * 35]),
+			i if i < N * 37 => self.segment_37.as_ref().map(|segment| segment[i - N * 36]),
+			i if i < N * 38 => self.segment_38.as_ref().map(|segment| segment[i - N * 37]),
+			i if i < N * 39 => self.segment_39.as_ref().map(|segment| segment[i - N * 38]),
+			i if i < N * 40 => self.segment_40.as_ref().map(|segment| segment[i - N * 39]),
+			i if i < N * 41 => self.segment_41.as_ref().map(|segment| segment[i - N * 40]),
+			i if i < N * 42 => self.segment_42.as_ref().map(|segment| segment[i - N * 41]),
+			i if i < N * 43 => self.segment_43.as_ref().map(|segment| segment[i - N * 42]),
+			i if i < N * 44 => self.segment_44.as_ref().map(|segment| segment[i - N * 43]),
+			i if i < N * 45 => self.segment_45.as_ref().map(|segment| segment[i - N * 44]),
+			i if i < N * 46 => self.segment_46.as_ref().map(|segment| segment[i - N * 45]),
+			i if i < N * 47 => self.segment_47.as_ref().map(|segment| segment[i - N * 46]),
+			i if i < N * 48 => self.segment_48.as_ref().map(|segment| segment[i - N * 47]),
+			i if i < N * 49 => self.segment_49.as_ref().map(|segment| segment[i - N * 48]),
+			i if i < N * 50 => self.segment_50.as_ref().map(|segment| segment[i - N * 49]),
 			_ => None,
 		}
 	}
@@ -343,6 +525,36 @@ impl<const N: usize> SegmentedStack<N> {
 			&self.segment_18,
 			&self.segment_19,
 			&self.segment_20,
+			&self.segment_21,
+			&self.segment_22,
+			&self.segment_23,
+			&self.segment_24,
+			&self.segment_25,
+			&self.segment_26,
+			&self.segment_27,
+			&self.segment_28,
+			&self.segment_29,
+			&self.segment_30,
+			&self.segment_31,
+			&self.segment_32,
+			&self.segment_33,
+			&self.segment_34,
+			&self.segment_35,
+			&self.segment_36,
+			&self.segment_37,
+			&self.segment_38,
+			&self.segment_39,
+			&self.segment_40,
+			&self.segment_41,
+			&self.segment_42,
+			&self.segment_43,
+			&self.segment_44,
+			&self.segment_45,
+			&self.segment_46,
+			&self.segment_47,
+			&self.segment_48,
+			&self.segment_49,
+			&self.segment_50,
 		];
 		for (i, segment) in segments.iter().enumerate() {
 			if let Some(ref segment) = segment {
