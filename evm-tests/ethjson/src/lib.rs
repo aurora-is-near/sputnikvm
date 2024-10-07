@@ -27,6 +27,5 @@ pub mod transaction;
 pub mod uint;
 pub mod vm;
 
-mod authentication_list;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test_helpers;

@@ -1782,7 +1782,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		if !self.config.has_authorization_list {
 			return self.code(authority);
 		}
-		// Check is it loop for Delegated designation
+		// Check if it is a loop for Delegated designation
 		self.get_authority_target(authority).map_or_else(
 			|| self.code(authority),
 			|target_address| self.code(target_address),
@@ -1790,14 +1790,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	}
 
 	// Warm target according to EIP-2929
-	// It warm up the target address or storage storage. If in the target tuple
+	// It warm up the target address or storage value by key. If in the target tuple
 	// the storage is `None` then it's warming up the address.
 	fn warm_target(&mut self, target: (H160, Option<H256>)) {
-		let (address, storage) = target;
-		if let Some(key) = storage {
-			self.state.metadata_mut().access_storage(address, key);
-		} else {
-			self.state.metadata_mut().access_address(address);
+		match target {
+			(address, None) => self.state.metadata_mut().access_address(address),
+			(address, Some(key)) => self.state.metadata_mut().access_storage(address, key),
 		}
 	}
 }

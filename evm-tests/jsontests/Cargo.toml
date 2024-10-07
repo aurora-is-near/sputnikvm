@@ -23,7 +23,7 @@ rlp = "0.5"
 sha3 = "0.10"
 parity-bytes = "0.1"
 env_logger = "0.11"
-lazy_static = "1.4.0"
+hex-literal = "0.4"
 
 [features]
 enable-slow-tests = []

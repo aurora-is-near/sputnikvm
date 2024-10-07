@@ -607,13 +607,17 @@ pub fn static_opcode_cost(opcode: Opcode) -> Option<u32> {
 
 /// Get and set warm address if it's not warmed.
 fn get_and_set_warm<H: Handler>(handler: &mut H, target: H160) -> (bool, Option<bool>) {
-	let mut delegated_designator_is_cold = None;
-	if let Some(authority_target) = handler.get_authority_target(target) {
-		delegated_designator_is_cold = Some(handler.is_cold(authority_target, None));
-		if delegated_designator_is_cold == Some(true) {
-			handler.warm_target((authority_target, None));
-		}
-	}
+	let delegated_designator_is_cold =
+		handler
+			.get_authority_target(target)
+			.map(|authority_target| {
+				if handler.is_cold(authority_target, None) {
+					handler.warm_target((authority_target, None));
+					true
+				} else {
+					false
+				}
+			});
 	let target_is_cold = handler.is_cold(target, None);
 	if target_is_cold {
 		handler.warm_target((target, None));

@@ -12,13 +12,13 @@ use evm::executor::stack::{
 };
 use evm::utils::U64_MAX;
 use evm::{Config, Context, ExitError, ExitReason, ExitSucceed};
-use lazy_static::lazy_static;
 use libsecp256k1::SecretKey;
 use primitive_types::{H160, H256, U256};
 use serde::Deserialize;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 #[derive(Default, Debug, Clone)]
 pub struct VerboseOutput {
@@ -152,21 +152,11 @@ impl Test {
 	}
 }
 
-lazy_static! {
-	static ref ISTANBUL_BUILTINS: BTreeMap<H160, ethcore_builtin::Builtin> = istanbul_builtins();
-}
-
-lazy_static! {
-	static ref BERLIN_BUILTINS: BTreeMap<H160, ethcore_builtin::Builtin> = berlin_builtins();
-}
-
-lazy_static! {
-	static ref CANCUN_BUILTINS: BTreeMap<H160, ethcore_builtin::Builtin> = cancun_builtins();
-}
-
-lazy_static! {
-	static ref PRAGUE_BUILTINS: BTreeMap<H160, ethcore_builtin::Builtin> = prague_builtins();
-}
+type LazyPrecompiles = LazyLock<BTreeMap<H160, ethcore_builtin::Builtin>>;
+static ISTANBUL_BUILTINS: LazyPrecompiles = LazyLock::new(istanbul_builtins);
+static BERLIN_BUILTINS: LazyPrecompiles = LazyLock::new(berlin_builtins);
+static CANCUN_BUILTINS: LazyPrecompiles = LazyLock::new(cancun_builtins);
+static PRAGUE_BUILTINS: LazyPrecompiles = LazyLock::new(prague_builtins);
 
 macro_rules! precompile_entry {
 	($map:expr, $builtins:expr, $index:expr) => {
@@ -538,18 +528,6 @@ fn cancun_builtins() -> BTreeMap<H160, ethcore_builtin::Builtin> {
 	use ethjson::spec::builtin::{BuiltinCompat, Linear, PricingCompat};
 
 	let mut builtins = berlin_builtins();
-
-	// let builtins: BTreeMap<Address, BuiltinCompat> = BTreeMap::from([(
-	// 	Address(H160::from_low_u64_be(0xA)),
-	// 	BuiltinCompat {
-	// 		name: "kzg".to_string(),
-	// 		pricing: PricingCompat::Single(Pricing::Linear(Linear {
-	// 			base: 50_000,
-	// 			word: 0,
-	// 		})),
-	// 		activate_at: None,
-	// 	},
-	// )]);
 	builtins.insert(
 		Address(H160::from_low_u64_be(0xA)).into(),
 		ethjson::spec::Builtin::from(BuiltinCompat {
@@ -1193,7 +1171,7 @@ fn test_run(
 		let caller_code = original_state
 			.get(&caller)
 			.map_or_else(Vec::new, |acc| acc.code.clone());
-		// EIP-7702 - check is it delegated designation. If it's delegation designation then
+		// EIP-7702 - check if it's delegated designation. If it's delegation designation then
 		// even if `caller_code` is non-empty transaction should be executed.
 		let is_delegated = original_state
 			.get(&caller)

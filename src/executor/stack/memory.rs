@@ -700,7 +700,7 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 			.map(|target| self.is_cold(target))
 	}
 
-	/// Get authority target ( EIP-7702) - delegated address.
+	/// Get authority target (EIP-7702) - delegated address.
 	/// First we're trying to get authority target from the cache recursively with parent state,
 	/// if it's not found we get code for the authority address and check if it's delegation
 	/// designator. If it's true, we add result to cache and return delegated target address.
