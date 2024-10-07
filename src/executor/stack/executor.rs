@@ -580,8 +580,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		value: U256,
 		init_code: Vec<u8>,
 		gas_limit: u64,
-		access_list: Vec<(H160, Vec<H256>)>,    // See EIP-2930
-		authorization_list: Vec<Authorization>, // See EIP-7702
+		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
 		if self.nonce(caller) >= U64_MAX {
 			return (ExitError::MaxNonce.into(), Vec::new());
@@ -604,17 +603,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			}
 		}
 
-		if let Err(e) =
-			self.record_create_transaction_cost(&init_code, &access_list, authorization_list.len())
-		{
+		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list, 0) {
 			return emit_exit!(e.into(), Vec::new());
 		}
 
 		self.warm_addresses_and_storage(caller, address, access_list);
-		// EIP-7702. authorized accounts
-		if let Err(e) = self.authorized_accounts(authorization_list) {
-			return (e.into(), Vec::new());
-		}
 
 		match self.create_inner(
 			caller,
@@ -644,7 +637,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		init_code: Vec<u8>,
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
-		authorization_list: Vec<Authorization>,
 	) -> (ExitReason, Vec<u8>) {
 		let address = self.create_address(CreateScheme::Fixed(address));
 
@@ -656,15 +648,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			address
 		});
 
-		if let Err(e) =
-			self.record_create_transaction_cost(&init_code, &access_list, authorization_list.len())
-		{
+		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list, 0) {
 			return emit_exit!(e.into(), Vec::new());
 		}
 
 		self.warm_addresses_and_storage(caller, address, access_list);
-		// EIP-7702. authorized accounts
-		self.authorized_accounts(authorization_list);
 
 		match self.create_inner(
 			caller,
@@ -694,7 +682,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		salt: H256,
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
-		authorization_list: Vec<Authorization>,
 	) -> (ExitReason, Vec<u8>) {
 		if let Some(limit) = self.config.max_initcode_size {
 			if init_code.len() > limit {
@@ -718,17 +705,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			address,
 		});
 
-		if let Err(e) =
-			self.record_create_transaction_cost(&init_code, &access_list, authorization_list.len())
-		{
+		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list, 0) {
 			return emit_exit!(e.into(), Vec::new());
 		}
 
 		self.warm_addresses_and_storage(caller, address, access_list);
-		// EIP-7702. authorized accounts
-		if let Err(e) = self.authorized_accounts(authorization_list) {
-			return (e.into(), Vec::new());
-		}
 
 		match self.create_inner(
 			caller,

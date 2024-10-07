@@ -1267,14 +1267,8 @@ fn test_run(
 						let code = data;
 						let value = transaction.value.into();
 
-						let reason = executor.transact_create(
-							caller,
-							value,
-							code,
-							gas_limit,
-							access_list,
-							authorization_list,
-						);
+						let reason =
+							executor.transact_create(caller, value, code, gas_limit, access_list);
 						if check_create_exit_reason(
 							&reason.0,
 							&state.expect_exception,
