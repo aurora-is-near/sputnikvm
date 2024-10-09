@@ -365,29 +365,26 @@ impl<'config> Gasometer<'config> {
 				access_list_address_len,
 				access_list_storage_len,
 				initcode_cost,
-				authorization_list_len,
 			} => {
 				let mut cost = self.config.gas_transaction_create
 					+ zero_data_len as u64 * self.config.gas_transaction_zero_data
 					+ non_zero_data_len as u64 * self.config.gas_transaction_non_zero_data
 					+ access_list_address_len as u64 * self.config.gas_access_list_address
-					+ access_list_storage_len as u64 * self.config.gas_access_list_storage_key
-					+ authorization_list_len as u64 * self.config.gas_per_empty_account_cost;
+					+ access_list_storage_len as u64 * self.config.gas_access_list_storage_key;
 				if self.config.max_initcode_size.is_some() {
 					cost += initcode_cost;
 				}
 
 				log_gas!(
 					self,
-					"Record Create {} [gas_transaction_create: {}, zero_data_len: {}, non_zero_data_len: {}, access_list_address_len: {}, access_list_storage_len: {}, initcode_cost: {}, authorization_list_len: {}]",
+					"Record Create {} [gas_transaction_create: {}, zero_data_len: {}, non_zero_data_len: {}, access_list_address_len: {}, access_list_storage_len: {}, initcode_cost: {}]",
 					cost,
 					self.config.gas_transaction_create,
 					zero_data_len,
 					non_zero_data_len,
 					access_list_address_len,
 					access_list_storage_len,
-					initcode_cost,
-					authorization_list_len
+					initcode_cost
 				);
 				cost
 			}
@@ -441,11 +438,7 @@ pub fn call_transaction_cost(
 /// Calculate the create transaction cost.
 #[allow(clippy::naive_bytecount)]
 #[must_use]
-pub fn create_transaction_cost(
-	data: &[u8],
-	access_list: &[(H160, Vec<H256>)],
-	authorization_list_len: usize,
-) -> TransactionCost {
+pub fn create_transaction_cost(data: &[u8], access_list: &[(H160, Vec<H256>)]) -> TransactionCost {
 	let zero_data_len = data.iter().filter(|v| **v == 0).count();
 	let non_zero_data_len = data.len() - zero_data_len;
 	let (access_list_address_len, access_list_storage_len) = count_access_list(access_list);
@@ -457,7 +450,6 @@ pub fn create_transaction_cost(
 		access_list_address_len,
 		access_list_storage_len,
 		initcode_cost,
-		authorization_list_len,
 	}
 }
 
@@ -1316,8 +1308,6 @@ pub enum TransactionCost {
 		access_list_storage_len: usize,
 		/// Cost of initcode = 2 * ceil(len(initcode) / 32) (see EIP-3860)
 		initcode_cost: u64,
-		/// Number of authorities in transaction authorization list (see EIP-7702)
-		authorization_list_len: usize,
 	},
 }
 

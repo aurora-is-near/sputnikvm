@@ -521,7 +521,7 @@ pub mod transaction {
 		let authorization_list_len = tx.authorization_list.len();
 
 		let cost = if is_contract_creation {
-			gasometer::create_transaction_cost(data, &access_list, authorization_list_len)
+			gasometer::create_transaction_cost(data, &access_list)
 		} else {
 			gasometer::call_transaction_cost(data, &access_list, authorization_list_len)
 		};
