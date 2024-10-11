@@ -1058,9 +1058,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let gas_limit = min(after_gas, target_gas);
 		try_or_fail!(self.state.metadata_mut().gasometer.record_cost(gas_limit));
 
-		if let Err(e) = self.state.inc_nonce(caller) {
-			return Capture::Exit((e.into(), None, Vec::new()));
-		}
+		// Increment Nonce for caller
+		try_or_fail!(self.state.inc_nonce(caller));
 
 		self.enter_substate(gas_limit, false);
 
