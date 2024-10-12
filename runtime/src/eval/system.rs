@@ -448,8 +448,8 @@ pub fn create<H: Handler>(runtime: &mut Runtime, is_create2: bool, handler: &mut
 	};
 
 	match handler.create(runtime.context.address, scheme, value, code, None) {
-		Capture::Exit((reason, address, return_data)) => {
-			match super::finish_create(runtime, reason, address, return_data) {
+		Capture::Exit((reason, return_data)) => {
+			match super::finish_create(runtime, reason, None, return_data) {
 				Ok(()) => Control::Continue,
 				Err(e) => Control::Exit(e),
 			}
