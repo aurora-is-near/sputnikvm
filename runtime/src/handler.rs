@@ -78,7 +78,7 @@ pub trait Handler {
 	///
 	/// # Errors
 	/// Return `ExitError`
-	fn is_cold(&mut self, address: H160, index: Option<H256>) -> Result<bool, ExitError>;
+	fn is_cold(&mut self, address: H160, index: Option<H256>) -> bool;
 
 	/// Set storage value of address at index.
 	///
@@ -103,7 +103,7 @@ pub trait Handler {
 		value: U256,
 		init_code: Vec<u8>,
 		target_gas: Option<u64>,
-	) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt>;
+	) -> Capture<(ExitReason, Vec<u8>), Self::CreateInterrupt>;
 	/// Feed in create feedback.
 	///
 	/// # Errors
