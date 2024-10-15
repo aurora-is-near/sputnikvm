@@ -839,17 +839,17 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		target_gas: Option<u64>,
 		take_l64: bool,
 	) -> Result<u64, ExitError> {
+		let initial_after_gas = self.state.metadata().gasometer.gas();
 		let after_gas = if take_l64 && self.config.call_l64_after_gas {
 			if self.config.estimate {
-				let initial_after_gas = self.state.metadata().gasometer.gas();
 				let diff = initial_after_gas - l64(initial_after_gas);
 				self.state.metadata_mut().gasometer.record_cost(diff)?;
-				self.state.metadata().gasometer.gas()
+				initial_after_gas
 			} else {
-				l64(self.state.metadata().gasometer.gas())
+				l64(initial_after_gas)
 			}
 		} else {
-			self.state.metadata().gasometer.gas()
+			initial_after_gas
 		};
 		let target_gas = target_gas.unwrap_or(after_gas);
 		let gas_limit = min(target_gas, after_gas);
