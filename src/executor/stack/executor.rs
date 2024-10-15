@@ -1642,7 +1642,7 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 				// change to the precompile API. But this means a custom precompile could still
 				// potentially cause a stack overflow if you're not careful.
 				let mut call_stack: SmallVec<[TaggedRuntime; DEFAULT_CALL_STACK_CAPACITY]> =
-					smallvec![rt.0];
+					smallvec!(rt.0);
 				let (reason, _, return_data) =
 					self.executor.execute_with_call_stack(&mut call_stack);
 				emit_exit!(reason, return_data)
