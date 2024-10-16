@@ -517,7 +517,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		value: U256,
 		init_code: Vec<u8>,
 		gas_limit: u64,
-		access_list: &[(H160, Vec<H256>)], // See EIP-2930
+		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
 		event!(TransactCreate {
 			caller,
@@ -534,7 +534,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			}
 		}
 
-		if let Err(e) = self.record_create_transaction_cost(&init_code, access_list) {
+		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
 			return emit_exit!(e.into(), Vec::new());
 		}
 
@@ -611,7 +611,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		init_code: Vec<u8>,
 		salt: H256,
 		gas_limit: u64,
-		access_list: &[(H160, Vec<H256>)], // See EIP-2930
+		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
 		let code_hash = H256::from_slice(Keccak256::digest(&init_code).as_slice());
 		event!(TransactCreate2 {
@@ -634,7 +634,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			}
 		}
 
-		if let Err(e) = self.record_create_transaction_cost(&init_code, access_list) {
+		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
 			return emit_exit!(e.into(), Vec::new());
 		}
 
@@ -676,7 +676,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		value: U256,
 		data: Vec<u8>,
 		gas_limit: u64,
-		access_list: &[(H160, Vec<H256>)],
+		access_list: Vec<(H160, Vec<H256>)>,
 	) -> (ExitReason, Vec<u8>) {
 		event!(TransactCall {
 			caller,
@@ -690,7 +690,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return (ExitError::MaxNonce.into(), Vec::new());
 		}
 
-		let transaction_cost = gasometer::call_transaction_cost(&data, access_list);
+		let transaction_cost = gasometer::call_transaction_cost(&data, &access_list);
 		let gasometer = &mut self.state.metadata_mut().gasometer;
 		match gasometer.record_transaction(transaction_cost) {
 			Ok(()) => (),
@@ -792,17 +792,17 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 	}
 
-	pub fn initialize_with_access_list(&mut self, access_list: &[(H160, Vec<H256>)]) {
+	pub fn initialize_with_access_list(&mut self, access_list: Vec<(H160, Vec<H256>)>) {
 		let addresses = access_list.iter().map(|a| a.0);
 		self.state.metadata_mut().access_addresses(addresses);
 
 		let storage_keys = access_list
-			.iter()
-			.flat_map(|(address, keys)| keys.iter().map(move |key| (*address, *key)));
+			.into_iter()
+			.flat_map(|(address, keys)| keys.into_iter().map(move |key| (address, key)));
 		self.state.metadata_mut().access_storages(storage_keys);
 	}
 
-	fn initialize_addresses(&mut self, addresses: &[H160], access_list: &[(H160, Vec<H256>)]) {
+	fn initialize_addresses(&mut self, addresses: &[H160], access_list: Vec<(H160, Vec<H256>)>) {
 		if self.config.increase_state_access_gas {
 			if self.config.warm_coinbase_address {
 				// Warm coinbase address for EIP-3651
