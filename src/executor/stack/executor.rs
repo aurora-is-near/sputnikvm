@@ -47,6 +47,8 @@ macro_rules! try_or_fail {
 }
 
 const DEFAULT_CALL_STACK_CAPACITY: usize = 4;
+/// EOFv1 magic number
+pub const EOF_MAGIC: &[u8; 2] = &[0xEF, 0x00];
 
 const fn l64(gas: u64) -> u64 {
 	gas - gas / 64
@@ -620,14 +622,19 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		self.warm_addresses_and_storage(caller, address, access_list);
 
-		match self.create_inner(
-			caller,
-			CreateScheme::Legacy { caller },
-			value,
-			init_code,
-			Some(gas_limit),
-			false,
-		) {
+		let create_inner_result = if self.config.has_eof && init_code.starts_with(EOF_MAGIC) {
+			self.create_eof_inner(caller, value, init_code, Some(gas_limit), false)
+		} else {
+			self.create_inner(
+				caller,
+				CreateScheme::Legacy { caller },
+				value,
+				init_code,
+				Some(gas_limit),
+				false,
+			)
+		};
+		match create_inner_result {
 			Capture::Exit((s, v)) => emit_exit!(s, v),
 			Capture::Trap(rt) => {
 				let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
@@ -1021,6 +1028,104 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let gas_limit = min(target_gas, after_gas);
 		self.state.metadata_mut().gasometer.record_cost(gas_limit)?;
 		Ok(gas_limit)
+	}
+
+	/// EOFv1 create inner
+	fn create_eof_inner(
+		&mut self,
+		caller: H160,
+		value: U256,
+		init_code: Vec<u8>,
+		target_gas: Option<u64>,
+		take_l64: bool,
+	) -> Capture<(ExitReason, Vec<u8>), StackExecutorCreateInterrupt<'static>> {
+		if self.nonce(caller) >= U64_MAX {
+			return Capture::Exit((ExitError::MaxNonce.into(), Vec::new()));
+		}
+
+		// Warm address for EIP-2929
+		let address = self.create_address(scheme);
+		self.state
+			.metadata_mut()
+			.access_addresses([caller, address].iter().copied());
+
+		event!(Create {
+			caller,
+			address,
+			scheme,
+			value,
+			init_code: &init_code,
+			target_gas
+		});
+
+		if let Some(depth) = self.state.metadata().depth {
+			// As Depth incremented in `enter_substate` we must check depth counter
+			// early to verify exceeding Stack limit. It allows avoid
+			// issue with wrong detection `CallTooDeep` for Create.
+			if depth + 1 > self.config.call_stack_limit {
+				return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
+			}
+		}
+
+		// Check is transfer value is enough
+		if self.balance(caller) < value {
+			return crate::try_or_fail::Exit((ExitError::OutOfFund.into(), Vec::new()));
+		}
+
+		let gas_limit = try_or_fail!(self.calc_gas_limit_and_record(target_gas, take_l64));
+
+		// Check nonce and increment it for caller
+		try_or_fail!(self.state.inc_nonce(caller));
+
+		// Check create collision: EIP-7610
+		if self.is_create_collision(address) {
+			return Capture::Exit((ExitError::CreateCollision.into(), Vec::new()));
+		}
+
+		// Enter to execution substate
+		self.enter_substate(gas_limit, false);
+
+		// Check nonce and increment it for created address after  entering substate
+		if self.config.create_increase_nonce {
+			try_or_fail!(self.state.inc_nonce(address));
+		}
+
+		// Transfer funds if needed
+		let transfer = Transfer {
+			source: caller,
+			target: address,
+			value,
+		};
+		match self.state.transfer(transfer) {
+			Ok(()) => (),
+			Err(e) => {
+				let _ = self.exit_substate(&StackExitKind::Reverted);
+				return Capture::Exit((ExitReason::Error(e), Vec::new()));
+			}
+		}
+		// It needed for CANCUN hard fork EIP-6780 we should mark account as created
+		// to handle SELFDESTRUCT in the same transaction
+		self.state.set_created(address);
+
+		// Init EVM runtime in Context
+		let context = Context {
+			address,
+			caller,
+			apparent_value: value,
+		};
+		let runtime = Runtime::new(
+			Rc::new(init_code),
+			Rc::new(Vec::new()),
+			context,
+			self.config.stack_limit,
+			self.config.memory_limit,
+		);
+
+		// Set Runtime kind with pre-init Runtime and return Trap, that mean continue execution
+		Capture::Trap(StackExecutorCreateInterrupt(TaggedRuntime {
+			kind: RuntimeKind::Create(address),
+			inner: MaybeBorrowed::Owned(runtime),
+		}))
 	}
 
 	fn create_inner(
