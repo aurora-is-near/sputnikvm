@@ -47,7 +47,7 @@ macro_rules! try_or_fail {
 }
 
 const DEFAULT_CALL_STACK_CAPACITY: usize = 4;
-/// EOFv1 magic number
+/// `EOFv1` magic number
 pub const EOF_MAGIC: &[u8; 2] = &[0xEF, 0x00];
 
 const fn l64(gas: u64) -> u64 {
@@ -680,7 +680,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			Some(gas_limit),
 			false,
 		) {
-			Capture::Exit((s, _, v)) => emit_exit!(s, v),
+			Capture::Exit((s, v)) => emit_exit!(s, v),
 			Capture::Trap(rt) => {
 				let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
 					smallvec!(rt.0);
@@ -1030,7 +1030,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		Ok(gas_limit)
 	}
 
-	/// EOFv1 create inner
+	/// `EOFv1` create inner
 	fn create_eof_inner(
 		&mut self,
 		caller: H160,
@@ -1044,15 +1044,15 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 
 		// Warm address for EIP-2929
-		let address = self.create_address(scheme);
+		// TODO refactore to EOF
+		let address = H160::zero();
 		self.state
 			.metadata_mut()
 			.access_addresses([caller, address].iter().copied());
 
-		event!(Create {
+		event!(CreateEOF {
 			caller,
 			address,
-			scheme,
 			value,
 			init_code: &init_code,
 			target_gas
@@ -1069,7 +1069,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		// Check is transfer value is enough
 		if self.balance(caller) < value {
-			return crate::try_or_fail::Exit((ExitError::OutOfFund.into(), Vec::new()));
+			return Capture::Exit((ExitError::OutOfFund.into(), Vec::new()));
 		}
 
 		let gas_limit = try_or_fail!(self.calc_gas_limit_and_record(target_gas, take_l64));
@@ -1467,6 +1467,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		#[cfg(feature = "tracing")]
 		{
 			use evm_runtime::tracing::Event::Step;
+			#[allow(clippy::used_underscore_binding)]
 			evm_runtime::tracing::with(|listener| {
 				listener.event(Step {
 					address: *address,
@@ -1474,7 +1475,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 					position: &Ok(_pc),
 					stack: machine.stack(),
 					memory: machine.memory(),
-				})
+				});
 			});
 		}
 
@@ -1513,11 +1514,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		#[cfg(feature = "tracing")]
 		{
 			use evm_runtime::tracing::Event::StepResult;
+			#[allow(clippy::used_underscore_binding)]
 			evm_runtime::tracing::with(|listener| {
 				listener.event(StepResult {
 					result: _result,
 					return_value: _machine.return_value().as_slice(),
-				})
+				});
 			});
 		}
 	}
