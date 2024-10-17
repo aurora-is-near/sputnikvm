@@ -21,9 +21,10 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D clippy::all -D clippy::nursery
-
       - name: Clippy no_std
         run: cargo clippy --no-default-features -- -D clippy::all -D clippy::nursery
+      - name: Clippy with features
+        run: cargo clippy --features tracing,create-fixed -- -D clippy::all -D clippy::nursery
 
   build:
     runs-on: ubuntu-latest

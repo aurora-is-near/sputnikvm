@@ -519,18 +519,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
-		if self.nonce(caller) >= U64_MAX {
-			return (ExitError::MaxNonce.into(), Vec::new());
-		}
-
-		let address = self.create_address(CreateScheme::Legacy { caller });
-
 		event!(TransactCreate {
 			caller,
 			value,
 			init_code: &init_code,
 			gas_limit,
-			address,
+			address: self.create_address(CreateScheme::Legacy { caller }),
 		});
 
 		if let Some(limit) = self.config.max_initcode_size {
@@ -545,7 +539,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 
 		// Initialize initial addresses for EIP-2929
-		self.initialize_addresses(caller, address, access_list);
+		self.initialize_addresses(&[caller], access_list);
 
 		match self.create_inner(
 			caller,
@@ -576,14 +570,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
-		let address = self.create_address(CreateScheme::Fixed(address));
-
 		event!(TransactCreate {
 			caller,
 			value,
 			init_code: &init_code,
 			gas_limit,
-			address
+			address: self.create_address(CreateScheme::Fixed(address)),
 		});
 
 		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
@@ -591,7 +583,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 
 		// Initialize initial addresses for EIP-2929
-		self.initialize_addresses(caller, address, access_list);
+		self.initialize_addresses(&[caller], access_list);
 
 		match self.create_inner(
 			caller,
@@ -601,7 +593,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			Some(gas_limit),
 			false,
 		) {
-			Capture::Exit((s, _, v)) => emit_exit!(s, v),
+			Capture::Exit((s, v)) => emit_exit!(s, v),
 			Capture::Trap(rt) => {
 				let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
 					smallvec!(rt.0);
@@ -621,6 +613,20 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
+		let code_hash = H256::from_slice(Keccak256::digest(&init_code).as_slice());
+		event!(TransactCreate2 {
+			caller,
+			value,
+			init_code: &init_code,
+			salt,
+			gas_limit,
+			address: self.create_address(CreateScheme::Create2 {
+				caller,
+				code_hash,
+				salt,
+			}),
+		});
+
 		if let Some(limit) = self.config.max_initcode_size {
 			if init_code.len() > limit {
 				self.state.metadata_mut().gasometer.fail();
@@ -628,27 +634,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			}
 		}
 
-		let code_hash = H256::from_slice(Keccak256::digest(&init_code).as_slice());
-		let address = self.create_address(CreateScheme::Create2 {
-			caller,
-			code_hash,
-			salt,
-		});
-		event!(TransactCreate2 {
-			caller,
-			value,
-			init_code: &init_code,
-			salt,
-			gas_limit,
-			address,
-		});
-
 		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
 			return emit_exit!(e.into(), Vec::new());
 		}
 
 		// Initialize initial addresses for EIP-2929
-		self.initialize_addresses(caller, address, access_list);
+		self.initialize_addresses(&[caller], access_list);
 
 		match self.create_inner(
 			caller,
@@ -707,7 +698,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 
 		// Initialize initial addresses for EIP-2929
-		self.initialize_addresses(caller, address, access_list);
+		self.initialize_addresses(&[caller, address], access_list);
 
 		if let Err(e) = self.state.inc_nonce(caller) {
 			return (e.into(), Vec::new());
@@ -811,23 +802,18 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		self.state.metadata_mut().access_storages(storage_keys);
 	}
 
-	fn initialize_addresses(
-		&mut self,
-		caller: H160,
-		address: H160,
-		access_list: Vec<(H160, Vec<H256>)>,
-	) {
+	fn initialize_addresses(&mut self, addresses: &[H160], access_list: Vec<(H160, Vec<H256>)>) {
 		if self.config.increase_state_access_gas {
 			if self.config.warm_coinbase_address {
 				// Warm coinbase address for EIP-3651
 				let coinbase = self.block_coinbase();
 				self.state
 					.metadata_mut()
-					.access_addresses([caller, address, coinbase].iter().copied());
+					.access_addresses(addresses.iter().copied().chain(Some(coinbase)));
 			} else {
 				self.state
 					.metadata_mut()
-					.access_addresses([caller, address].iter().copied());
+					.access_addresses(addresses.iter().copied());
 			};
 
 			self.initialize_with_access_list(access_list);
@@ -1191,6 +1177,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		#[cfg(feature = "tracing")]
 		{
 			use evm_runtime::tracing::Event::Step;
+			#[allow(clippy::used_underscore_binding)]
 			evm_runtime::tracing::with(|listener| {
 				listener.event(Step {
 					address: *address,
@@ -1198,7 +1185,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 					position: &Ok(_pc),
 					stack: machine.stack(),
 					memory: machine.memory(),
-				})
+				});
 			});
 		}
 
@@ -1246,11 +1233,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		#[cfg(feature = "tracing")]
 		{
 			use evm_runtime::tracing::Event::StepResult;
+			#[allow(clippy::used_underscore_binding)]
 			evm_runtime::tracing::with(|listener| {
 				listener.event(StepResult {
 					result: _result,
 					return_value: _machine.return_value().as_slice(),
-				})
+				});
 			});
 		}
 	}
