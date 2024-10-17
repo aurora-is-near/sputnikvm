@@ -595,18 +595,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
-		if self.nonce(caller) >= U64_MAX {
-			return (ExitError::MaxNonce.into(), Vec::new());
-		}
-
-		let address = self.create_address(CreateScheme::Legacy { caller });
-
 		event!(TransactCreate {
 			caller,
 			value,
 			init_code: &init_code,
 			gas_limit,
-			address,
+			address: self.create_address(CreateScheme::Legacy { caller }),
 		});
 
 		if let Some(limit) = self.config.max_initcode_size {
@@ -620,7 +614,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return emit_exit!(e.into(), Vec::new());
 		}
 
-		self.warm_addresses_and_storage(caller, address, access_list);
+		self.warm_addresses_and_storage(&[caller], access_list);
 
 		let create_inner_result = if self.config.has_eof && init_code.starts_with(EOF_MAGIC) {
 			self.create_eof_inner(caller, value, init_code, Some(gas_limit), false)
@@ -656,21 +650,19 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
-		let address = self.create_address(CreateScheme::Fixed(address));
-
 		event!(TransactCreate {
 			caller,
 			value,
 			init_code: &init_code,
 			gas_limit,
-			address
+			address: self.create_address(CreateScheme::Fixed(address)),
 		});
 
 		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
 			return emit_exit!(e.into(), Vec::new());
 		}
 
-		self.warm_addresses_and_storage(caller, address, access_list);
+		self.warm_addresses_and_storage(&[caller], access_list);
 
 		match self.create_inner(
 			caller,
@@ -701,6 +693,20 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
+		let code_hash = H256::from_slice(Keccak256::digest(&init_code).as_slice());
+		event!(TransactCreate2 {
+			caller,
+			value,
+			init_code: &init_code,
+			salt,
+			gas_limit,
+			address: self.create_address(CreateScheme::Create2 {
+				caller,
+				code_hash,
+				salt,
+			}),
+		});
+
 		if let Some(limit) = self.config.max_initcode_size {
 			if init_code.len() > limit {
 				self.state.metadata_mut().gasometer.fail();
@@ -708,26 +714,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			}
 		}
 
-		let code_hash = H256::from_slice(Keccak256::digest(&init_code).as_slice());
-		let address = self.create_address(CreateScheme::Create2 {
-			caller,
-			code_hash,
-			salt,
-		});
-		event!(TransactCreate2 {
-			caller,
-			value,
-			init_code: &init_code,
-			salt,
-			gas_limit,
-			address,
-		});
-
 		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
 			return emit_exit!(e.into(), Vec::new());
 		}
 
-		self.warm_addresses_and_storage(caller, address, access_list);
+		self.warm_addresses_and_storage(&[caller], access_list);
 
 		match self.create_inner(
 			caller,
@@ -791,7 +782,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return (e.into(), Vec::new());
 		}
 
-		self.warm_addresses_and_storage(caller, address, access_list);
+		self.warm_addresses_and_storage(&[caller, address], access_list);
+
 		// EIP-7702. authorized accounts
 		// NOTE: it must be after `inc_nonce`
 		if let Err(e) = self.authorized_accounts(authorization_list) {
@@ -913,8 +905,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	/// - [EIP-3651: Warm COINBASE](https://eips.ethereum.org/EIPS/eip-3651)
 	fn warm_addresses_and_storage(
 		&mut self,
-		caller: H160,
-		address: H160,
+		addresses: &[H160],
 		access_list: Vec<(H160, Vec<H256>)>,
 	) {
 		if self.config.increase_state_access_gas {
@@ -923,11 +914,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				let coinbase = self.block_coinbase();
 				self.state
 					.metadata_mut()
-					.access_addresses([caller, address, coinbase].iter().copied());
+					.access_addresses(addresses.iter().copied().chain(Some(coinbase)));
 			} else {
 				self.state
 					.metadata_mut()
-					.access_addresses([caller, address].iter().copied());
+					.access_addresses(addresses.iter().copied());
 			};
 
 			self.warm_access_list(access_list);
