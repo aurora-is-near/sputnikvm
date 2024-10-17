@@ -28,6 +28,13 @@ pub enum Event<'a> {
 		init_code: &'a [u8],
 		target_gas: Option<u64>,
 	},
+	CreateEOF {
+		caller: H160,
+		address: H160,
+		value: U256,
+		init_code: &'a [u8],
+		target_gas: Option<u64>,
+	},
 	Suicide {
 		address: H160,
 		target: H160,
