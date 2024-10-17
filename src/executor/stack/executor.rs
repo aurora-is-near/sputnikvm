@@ -568,7 +568,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		value: U256,
 		init_code: Vec<u8>,
 		gas_limit: u64,
-		access_list: &[(H160, Vec<H256>)], // See EIP-2930
+		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
 		event!(TransactCreate {
 			caller,
@@ -1177,6 +1177,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		#[cfg(feature = "tracing")]
 		{
 			use evm_runtime::tracing::Event::Step;
+			#[allow(clippy::used_underscore_binding)]
 			evm_runtime::tracing::with(|listener| {
 				listener.event(Step {
 					address: *address,
@@ -1184,7 +1185,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 					position: &Ok(_pc),
 					stack: machine.stack(),
 					memory: machine.memory(),
-				})
+				});
 			});
 		}
 
@@ -1232,11 +1233,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		#[cfg(feature = "tracing")]
 		{
 			use evm_runtime::tracing::Event::StepResult;
+			#[allow(clippy::used_underscore_binding)]
 			evm_runtime::tracing::with(|listener| {
 				listener.event(StepResult {
 					result: _result,
 					return_value: _machine.return_value().as_slice(),
-				})
+				});
 			});
 		}
 	}
