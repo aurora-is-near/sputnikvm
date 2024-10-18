@@ -1,3 +1,4 @@
+use super::eof;
 use crate::backend::Backend;
 use crate::executor::stack::precompile::{
 	PrecompileFailure, PrecompileHandle, PrecompileOutput, PrecompileSet,
@@ -47,8 +48,6 @@ macro_rules! try_or_fail {
 }
 
 const DEFAULT_CALL_STACK_CAPACITY: usize = 4;
-/// `EOFv1` magic number
-pub const EOF_MAGIC: &[u8; 2] = &[0xEF, 0x00];
 
 const fn l64(gas: u64) -> u64 {
 	gas - gas / 64
@@ -616,7 +615,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		self.warm_addresses_and_storage(&[caller], access_list);
 
-		let create_inner_result = if self.config.has_eof && init_code.starts_with(EOF_MAGIC) {
+		let create_inner_result = if self.config.has_eof && init_code.starts_with(eof::EOF_MAGIC) {
 			self.create_eof_inner(caller, value, init_code, Some(gas_limit), false)
 		} else {
 			self.create_inner(
@@ -1033,6 +1032,14 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		if self.nonce(caller) >= U64_MAX {
 			return Capture::Exit((ExitError::MaxNonce.into(), Vec::new()));
 		}
+
+		// Decode EOF header
+		let _header = match eof::EofHeader::decode(&init_code) {
+			Ok(header) => header,
+			Err(e) => {
+				return Capture::Exit((ExitReason::Error(e.into()), Vec::new()));
+			}
+		};
 
 		// Warm address for EIP-2929
 		// TODO refactore to EOF

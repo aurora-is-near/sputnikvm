@@ -2,6 +2,7 @@
 //! A memory-based state is provided, but can be replaced by a custom
 //! implementation, for example one interacting with a database.
 
+mod eof;
 mod executor;
 mod memory;
 mod precompile;
