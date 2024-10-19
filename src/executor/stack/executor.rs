@@ -1042,7 +1042,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		};
 
 		// Warm address for EIP-2929
-		// TODO refactore to EOF
 		let address = H160::zero();
 		self.state
 			.metadata_mut()
