@@ -288,6 +288,14 @@ pub struct Config {
 	pub has_mcopy: bool,
 	/// SELFDESTRUCT restriction: EIP-6780
 	pub has_restricted_selfdestruct: bool,
+	/// EIP-7702
+	pub has_authorization_list: bool,
+	/// EIP-7702
+	pub gas_per_empty_account_cost: u64,
+	/// EIP-7702
+	pub gas_per_auth_base_cost: u64,
+	/// EVM Object Format (EOF) support. See EIP-3540
+	pub has_eof: bool,
 }
 
 impl Config {
@@ -348,6 +356,10 @@ impl Config {
 			has_transient_storage: false,
 			has_mcopy: false,
 			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
+			gas_per_empty_account_cost: 0,
+			gas_per_auth_base_cost: 0,
+			has_eof: false,
 		}
 	}
 
@@ -408,6 +420,10 @@ impl Config {
 			has_transient_storage: false,
 			has_mcopy: false,
 			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
+			gas_per_auth_base_cost: 0,
+			gas_per_empty_account_cost: 0,
+			has_eof: false,
 		}
 	}
 
@@ -441,6 +457,12 @@ impl Config {
 		Self::config_with_derived_values(DerivedConfigInputs::cancun())
 	}
 
+	/// Prague hard fork configuration.
+	#[must_use]
+	pub const fn prague() -> Self {
+		Self::config_with_derived_values(DerivedConfigInputs::prague())
+	}
+
 	const fn config_with_derived_values(inputs: DerivedConfigInputs) -> Self {
 		let DerivedConfigInputs {
 			gas_storage_read_warm,
@@ -457,6 +479,10 @@ impl Config {
 			has_transient_storage,
 			has_mcopy,
 			has_restricted_selfdestruct,
+			has_authorization_list,
+			gas_per_empty_account_cost,
+			gas_per_auth_base_cost,
+			has_eof,
 		} = inputs;
 
 		// See https://eips.ethereum.org/EIPS/eip-2929
@@ -527,6 +553,10 @@ impl Config {
 			has_transient_storage,
 			has_mcopy,
 			has_restricted_selfdestruct,
+			has_authorization_list,
+			gas_per_empty_account_cost,
+			gas_per_auth_base_cost,
+			has_eof,
 		}
 	}
 }
@@ -550,6 +580,10 @@ struct DerivedConfigInputs {
 	has_transient_storage: bool,
 	has_mcopy: bool,
 	has_restricted_selfdestruct: bool,
+	has_authorization_list: bool,
+	gas_per_empty_account_cost: u64,
+	gas_per_auth_base_cost: u64,
+	has_eof: bool,
 }
 
 impl DerivedConfigInputs {
@@ -569,84 +603,50 @@ impl DerivedConfigInputs {
 			has_transient_storage: false,
 			has_mcopy: false,
 			has_restricted_selfdestruct: false,
+			has_authorization_list: false,
+			gas_per_auth_base_cost: 0,
+			gas_per_empty_account_cost: 0,
+			has_eof: false,
 		}
 	}
 
 	const fn london() -> Self {
-		Self {
-			gas_storage_read_warm: 100,
-			gas_sload_cold: 2100,
-			gas_access_list_storage_key: 1900,
-			decrease_clears_refund: true,
-			has_base_fee: true,
-			has_push0: false,
-			disallow_executable_format: true,
-			warm_coinbase_address: false,
-			max_initcode_size: None,
-			has_blob_base_fee: false,
-			has_shard_blob_transactions: false,
-			has_transient_storage: false,
-			has_mcopy: false,
-			has_restricted_selfdestruct: false,
-		}
+		let mut config = Self::berlin();
+		config.decrease_clears_refund = true;
+		config.has_base_fee = true;
+		config.disallow_executable_format = true;
+		config
 	}
 
 	const fn merge() -> Self {
-		Self {
-			gas_storage_read_warm: 100,
-			gas_sload_cold: 2100,
-			gas_access_list_storage_key: 1900,
-			decrease_clears_refund: true,
-			has_base_fee: true,
-			has_push0: false,
-			disallow_executable_format: true,
-			warm_coinbase_address: false,
-			max_initcode_size: None,
-			has_blob_base_fee: false,
-			has_shard_blob_transactions: false,
-			has_transient_storage: false,
-			has_mcopy: false,
-			has_restricted_selfdestruct: false,
-		}
+		Self::london()
 	}
 
 	const fn shanghai() -> Self {
-		Self {
-			gas_storage_read_warm: 100,
-			gas_sload_cold: 2100,
-			gas_access_list_storage_key: 1900,
-			decrease_clears_refund: true,
-			has_base_fee: true,
-			has_push0: true,
-			disallow_executable_format: true,
-			warm_coinbase_address: true,
-			// 2 * 24576 as per EIP-3860
-			max_initcode_size: Some(0xC000),
-			has_blob_base_fee: false,
-			has_shard_blob_transactions: false,
-			has_transient_storage: false,
-			has_mcopy: false,
-			has_restricted_selfdestruct: false,
-		}
+		let mut config = Self::merge();
+		config.has_push0 = true;
+		config.warm_coinbase_address = true;
+		// 2 * 24576 as per EIP-3860
+		config.max_initcode_size = Some(0xC000);
+		config
 	}
 
 	const fn cancun() -> Self {
-		Self {
-			gas_storage_read_warm: 100,
-			gas_sload_cold: 2100,
-			gas_access_list_storage_key: 1900,
-			decrease_clears_refund: true,
-			has_base_fee: true,
-			has_push0: true,
-			disallow_executable_format: true,
-			warm_coinbase_address: true,
-			// 2 * 24576 as per EIP-3860
-			max_initcode_size: Some(0xC000),
-			has_blob_base_fee: true,
-			has_shard_blob_transactions: true,
-			has_transient_storage: true,
-			has_mcopy: true,
-			has_restricted_selfdestruct: true,
-		}
+		let mut config = Self::shanghai();
+		config.has_blob_base_fee = true;
+		config.has_shard_blob_transactions = true;
+		config.has_transient_storage = true;
+		config.has_mcopy = true;
+		config.has_restricted_selfdestruct = true;
+		config
+	}
+
+	const fn prague() -> Self {
+		let mut config = Self::cancun();
+		config.has_authorization_list = true;
+		config.gas_per_empty_account_cost = 25000;
+		config.gas_per_auth_base_cost = 2500;
+		config.has_eof = true;
+		config
 	}
 }

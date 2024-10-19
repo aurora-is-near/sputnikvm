@@ -28,7 +28,9 @@ mod stack;
 pub mod utils;
 mod valids;
 
-pub use crate::error::{Capture, ExitError, ExitFatal, ExitReason, ExitRevert, ExitSucceed, Trap};
+pub use crate::error::{
+	Capture, EofDecodeError, ExitError, ExitFatal, ExitReason, ExitRevert, ExitSucceed, Trap,
+};
 pub use crate::external::ExternalOperation;
 pub use crate::memory::Memory;
 pub use crate::opcode::Opcode;
