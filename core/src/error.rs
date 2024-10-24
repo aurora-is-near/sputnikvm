@@ -254,6 +254,12 @@ pub enum EofDecodeError {
 	InvalidNumberContainerSections,
 	/// Invalid initcode size.
 	InvalidEOFInitcodeSize,
+	/// Short body while processing EOF.
+	MissingBodyWithoutData,
+	/// Body size is more than specified in the header.
+	DanglingData,
+	/// Invalid types section data.
+	InvalidTypesSection,
 }
 
 impl From<EofDecodeError> for ExitError {
