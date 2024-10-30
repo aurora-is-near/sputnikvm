@@ -509,12 +509,25 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 						interrupt_runtime = Some(rt.0);
 						continue;
 					}
+					Capture::Trap(Resolve::EOFCreate(rt, _)) => {
+						interrupt_runtime = Some(rt.0);
+						continue;
+					}
 				}
 			};
+
 			let runtime_kind = runtime.kind;
 			let (reason, maybe_address, return_data) = match runtime_kind {
 				RuntimeKind::Create(created_address) => {
 					let (reason, maybe_address, return_data) = self.cleanup_for_create(
+						created_address,
+						reason,
+						runtime.inner.machine().return_value(),
+					);
+					(reason, maybe_address, return_data)
+				}
+				RuntimeKind::EOFCreate(created_address) => {
+					let (reason, maybe_address, return_data) = self.cleanup_for_eof_create(
 						created_address,
 						reason,
 						runtime.inner.machine().return_value(),
@@ -542,6 +555,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			let maybe_error = match runtime_kind {
 				RuntimeKind::Create(_) => {
 					inner_runtime.finish_create(reason, maybe_address, return_data)
+				}
+				RuntimeKind::EOFCreate(_) => {
+					inner_runtime.finish_eof_create(reason, maybe_address, return_data)
 				}
 				RuntimeKind::Call(_) | RuntimeKind::Execute => {
 					inner_runtime.finish_call(reason, return_data)
@@ -615,25 +631,32 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 
 		self.warm_addresses_and_storage(&[caller], access_list);
 
-		let create_inner_result = if self.config.has_eof && init_code.starts_with(eof::EOF_MAGIC) {
-			self.create_eof_inner(caller, value, init_code, Some(gas_limit), false)
+		if self.config.has_eof && init_code.starts_with(eof::EOF_MAGIC) {
+			match self.create_eof_inner(caller, value, &init_code, Some(gas_limit), false) {
+				Capture::Exit((s, v)) => emit_exit!(s, v),
+				Capture::Trap(rt) => {
+					let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
+						smallvec!(rt.0);
+					let (s, _, v) = self.execute_with_call_stack(&mut cs);
+					emit_exit!(s, v)
+				}
+			}
 		} else {
-			self.create_inner(
+			match self.create_inner(
 				caller,
 				CreateScheme::Legacy { caller },
 				value,
 				init_code,
 				Some(gas_limit),
 				false,
-			)
-		};
-		match create_inner_result {
-			Capture::Exit((s, v)) => emit_exit!(s, v),
-			Capture::Trap(rt) => {
-				let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
-					smallvec!(rt.0);
-				let (s, _, v) = self.execute_with_call_stack(&mut cs);
-				emit_exit!(s, v)
+			) {
+				Capture::Exit((s, v)) => emit_exit!(s, v),
+				Capture::Trap(rt) => {
+					let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
+						smallvec!(rt.0);
+					let (s, _, v) = self.execute_with_call_stack(&mut cs);
+					emit_exit!(s, v)
+				}
 			}
 		}
 	}
@@ -1025,24 +1048,24 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		&mut self,
 		caller: H160,
 		value: U256,
-		init_code: Vec<u8>,
+		init_code: &[u8],
 		target_gas: Option<u64>,
 		take_l64: bool,
-	) -> Capture<(ExitReason, Vec<u8>), StackExecutorCreateInterrupt<'static>> {
+	) -> Capture<(ExitReason, Vec<u8>), StackExecutorEOFCreateInterrupt<'static>> {
 		if self.nonce(caller) >= U64_MAX {
 			return Capture::Exit((ExitError::MaxNonce.into(), Vec::new()));
 		}
 
-		// Decode EOF header
-		let _header = match eof::EofHeader::decode(&init_code) {
-			Ok(header) => header,
+		// Decode EOF
+		let (_eof, input) = match eof::Eof::decode_surplus(init_code) {
+			Ok(data) => data,
 			Err(e) => {
 				return Capture::Exit((ExitReason::Error(e.into()), Vec::new()));
 			}
 		};
 
 		// Warm address for EIP-2929
-		let address = H160::zero();
+		let address = self.create_address(CreateScheme::Legacy { caller });
 		self.state
 			.metadata_mut()
 			.access_addresses([caller, address].iter().copied());
@@ -1051,7 +1074,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			caller,
 			address,
 			value,
-			init_code: &init_code,
+			init_code,
 			target_gas
 		});
 
@@ -1111,7 +1134,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			apparent_value: value,
 		};
 		let runtime = Runtime::new(
-			Rc::new(init_code),
+			Rc::new(input),
 			Rc::new(Vec::new()),
 			context,
 			self.config.stack_limit,
@@ -1119,8 +1142,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		);
 
 		// Set Runtime kind with pre-init Runtime and return Trap, that mean continue execution
-		Capture::Trap(StackExecutorCreateInterrupt(TaggedRuntime {
-			kind: RuntimeKind::Create(address),
+		Capture::Trap(StackExecutorEOFCreateInterrupt(TaggedRuntime {
+			kind: RuntimeKind::EOFCreate(address),
 			inner: MaybeBorrowed::Owned(runtime),
 		}))
 	}
@@ -1334,6 +1357,17 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}))
 	}
 
+	// TODO: fix clippy
+	#[allow(clippy::needless_pass_by_value)]
+	fn cleanup_for_eof_create(
+		&self,
+		_created_address: H160,
+		_reason: ExitReason,
+		_return_data: Vec<u8>,
+	) -> (ExitReason, Option<H160>, Vec<u8>) {
+		todo!()
+	}
+
 	fn cleanup_for_create(
 		&mut self,
 		created_address: H160,
@@ -1526,10 +1560,13 @@ pub struct StackExecutorCallInterrupt<'borrow>(TaggedRuntime<'borrow>);
 
 pub struct StackExecutorCreateInterrupt<'borrow>(TaggedRuntime<'borrow>);
 
+pub struct StackExecutorEOFCreateInterrupt<'borrow>(TaggedRuntime<'borrow>);
+
 impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	for StackExecutor<'config, 'precompiles, S, P>
 {
 	type CreateInterrupt = StackExecutorCreateInterrupt<'static>;
+	type EOFCreateInterrupt = StackExecutorEOFCreateInterrupt<'static>;
 	type CreateFeedback = Infallible;
 	type CallInterrupt = StackExecutorCallInterrupt<'static>;
 	type CallFeedback = Infallible;

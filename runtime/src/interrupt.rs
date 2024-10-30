@@ -4,6 +4,8 @@ use crate::{Handler, Runtime};
 pub enum Resolve<'a, H: Handler> {
 	/// Create interrupt resolution.
 	Create(H::CreateInterrupt, ResolveCreate<'a>),
+	/// EOF Create interrupt resolution.
+	EOFCreate(H::EOFCreateInterrupt, ResolveEOFCreate<'a>),
 	/// Call interrupt resolution.
 	Call(H::CallInterrupt, ResolveCall<'a>),
 }
@@ -14,6 +16,19 @@ pub struct ResolveCreate<'a> {
 }
 
 impl<'a> ResolveCreate<'a> {
+	pub(crate) fn new(runtime: &'a mut Runtime) -> Self {
+		Self { _runtime: runtime }
+	}
+}
+
+/// EOF Create interrupt resolution.
+pub struct ResolveEOFCreate<'a> {
+	_runtime: &'a mut Runtime,
+}
+
+impl<'a> ResolveEOFCreate<'a> {
+	// TODO: resolve clippy
+	#[allow(dead_code)]
 	pub(crate) fn new(runtime: &'a mut Runtime) -> Self {
 		Self { _runtime: runtime }
 	}

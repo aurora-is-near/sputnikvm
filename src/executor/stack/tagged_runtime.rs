@@ -13,6 +13,7 @@ pub struct TaggedRuntime<'borrow> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeKind {
 	Create(H160),
+	EOFCreate(H160),
 	Call(H160),
 	/// Special variant used only in `StackExecutor::execute`
 	Execute,

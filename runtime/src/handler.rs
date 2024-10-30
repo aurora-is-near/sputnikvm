@@ -18,6 +18,8 @@ pub struct Transfer {
 pub trait Handler {
 	/// Type of `CREATE` interrupt.
 	type CreateInterrupt;
+	/// Type of `EOF CREATE` interrupt.
+	type EOFCreateInterrupt;
 	/// Feedback value for `CREATE` interrupt.
 	type CreateFeedback;
 	/// Type of `CALL` interrupt.

@@ -68,6 +68,17 @@ pub fn eval<H: Handler>(state: &mut Runtime, opcode: Opcode, handler: &mut H) ->
 	}
 }
 
+/// TODO: fix clippy
+#[allow(clippy::needless_pass_by_value)]
+pub fn finish_eof_create(
+	_runtime: &mut Runtime,
+	_reason: ExitReason,
+	_address: Option<H160>,
+	_return_data: Vec<u8>,
+) -> Result<(), ExitReason> {
+	todo!()
+}
+
 pub fn finish_create(
 	runtime: &mut Runtime,
 	reason: ExitReason,

@@ -94,8 +94,9 @@ impl EofHeader {
 			return Err(EofDecodeError::InvalidNumberForTypesKind);
 		}
 
-		// types_size [4, 5]: 2 bytes 0x0004-0xFFFF - 16-bit unsigned big-endian
-		// integer denoting the length of the type section content
+		// types_size [4, 5]: 2 bytes 0x0004-0x1000 - 16-bit unsigned big-endian
+		// integer denoting the length of the type section content.
+		// Validation: the number of code sections must be equal to types_size / 4
 		header.types_size = get_u16(input, 4);
 		if header.types_size % 4 != 0 {
 			return Err(EofDecodeError::InvalidTypesSectionSize);
@@ -108,7 +109,7 @@ impl EofHeader {
 
 		// `code_sections_sizes` - get from index [7]
 		let (index, code_sizes, sum) = Self::header_sections_code_size(input, 7)?;
-		// more than 1024 code sections are not allowed
+		// Validation: the number of code sections must be equal to `types_size / 4` = 0x0400 (1024)
 		if code_sizes.len() > 0x0400 {
 			return Err(EofDecodeError::TooManyCodeSections);
 		}

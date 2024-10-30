@@ -148,6 +148,18 @@ impl Runtime {
 		}
 	}
 
+	/// Finish EOF create
+	/// # Errors
+	/// Return `ExitReason`
+	pub fn finish_eof_create(
+		&mut self,
+		reason: ExitReason,
+		address: Option<H160>,
+		return_data: Vec<u8>,
+	) -> Result<(), ExitReason> {
+		eval::finish_eof_create(self, reason, address, return_data)
+	}
+
 	/// # Errors
 	/// Return `ExitReason`
 	pub fn finish_create(
