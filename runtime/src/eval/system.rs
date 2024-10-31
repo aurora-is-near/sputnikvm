@@ -523,16 +523,19 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 		CallScheme::Call | CallScheme::StaticCall => Context {
 			address: to.into(),
 			caller: runtime.context.address,
+			is_eof: runtime.context.is_eof,
 			apparent_value: value,
 		},
 		CallScheme::CallCode => Context {
 			address: runtime.context.address,
 			caller: runtime.context.address,
+			is_eof: runtime.context.is_eof,
 			apparent_value: value,
 		},
 		CallScheme::DelegateCall => Context {
 			address: runtime.context.address,
 			caller: runtime.context.caller,
+			is_eof: runtime.context.is_eof,
 			apparent_value: runtime.context.apparent_value,
 		},
 	};
@@ -573,4 +576,83 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 			Control::CallInterrupt(interrupt)
 		}
 	}
+}
+
+//===========================
+// EOF related functions
+
+// TODO: resolve clippy
+#[allow(dead_code)]
+pub fn eof_create<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn rjump<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn rjumpi<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn rjumpv<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn callf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn retf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn jumpf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn dupn<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn swapn<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn exchange<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn return_contract<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn return_data_load<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn ext_call<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn ext_delegate_call<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn ext_static_call<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
 }

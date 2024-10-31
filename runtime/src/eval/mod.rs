@@ -1,5 +1,6 @@
 #[macro_use]
 mod macros;
+mod data;
 mod system;
 
 use crate::prelude::*;
@@ -11,6 +12,9 @@ pub enum Control<H: Handler> {
 	Continue,
 	CallInterrupt(H::CallInterrupt),
 	CreateInterrupt(H::CreateInterrupt),
+	// TODO: resolve clippy
+	#[allow(dead_code)]
+	EOFCreateInterrupt(H::EOFCreateInterrupt),
 	Exit(ExitReason),
 }
 
@@ -64,6 +68,26 @@ pub fn eval<H: Handler>(state: &mut Runtime, opcode: Opcode, handler: &mut H) ->
 		Opcode::TLOAD => system::tload(state, handler),
 		Opcode::TSTORE => system::tstore(state, handler),
 		Opcode::MCOPY => system::mcopy(state, handler),
+		//== EOF Related Opcodes ==//
+		Opcode::DATALOAD => data::data_load(state, handler),
+		Opcode::DATALOADN => data::data_loadn(state, handler),
+		Opcode::DATASIZE => data::data_size(state, handler),
+		Opcode::DATACOPY => data::data_copy(state, handler),
+		Opcode::RJUMP => system::rjump(state, handler),
+		Opcode::RJUMPI => system::rjumpi(state, handler),
+		Opcode::RJUMPV => system::rjumpv(state, handler),
+		Opcode::CALLF => system::callf(state, handler),
+		Opcode::RETF => system::retf(state, handler),
+		Opcode::JUMPF => system::jumpf(state, handler),
+		Opcode::DUPN => system::dupn(state, handler),
+		Opcode::SWAPN => system::swapn(state, handler),
+		Opcode::EXCHANGE => system::exchange(state, handler),
+		Opcode::EOFCREATE => system::eof_create(state, handler),
+		Opcode::RETURNCONTRACT => system::return_contract(state, handler),
+		Opcode::RETURNDATALOAD => system::return_data_load(state, handler),
+		Opcode::EXTCALL => system::ext_call(state, handler),
+		Opcode::EXTDELEGATECALL => system::ext_delegate_call(state, handler),
+		Opcode::EXTSTATICCALL => system::ext_static_call(state, handler),
 		_ => handle_other(state, opcode, handler),
 	}
 }

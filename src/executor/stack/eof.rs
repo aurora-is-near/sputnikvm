@@ -1,3 +1,4 @@
+//! EOF - EVM Object Format v1 [EIP-3540](https://eips.ethereum.org/EIPS/eip-3540)
 #![allow(dead_code)]
 
 use crate::prelude::Vec;

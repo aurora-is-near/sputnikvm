@@ -173,6 +173,8 @@ pub enum ExitError {
 
 	#[cfg_attr(feature = "with-codec", codec(index = 17))]
 	EOFDecodeError(EofDecodeError),
+	#[cfg_attr(feature = "with-codec", codec(index = 18))]
+	EOFOpcodeDisabledInLegacy,
 }
 
 impl From<ExitError> for ExitReason {

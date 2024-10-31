@@ -41,6 +41,8 @@ pub struct Context {
 	pub address: H160,
 	/// Caller of the EVM.
 	pub caller: H160,
+	/// EOF flag
+	pub is_eof: bool,
 	/// Apparent value of the EVM.
 	pub apparent_value: U256,
 }

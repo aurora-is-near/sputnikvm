@@ -816,6 +816,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			caller,
 			address,
 			apparent_value: value,
+			is_eof: false,
 		};
 
 		match self.call_inner(
@@ -1131,6 +1132,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let context = Context {
 			address,
 			caller,
+			is_eof: true,
 			apparent_value: value,
 		};
 		let runtime = Runtime::new(
@@ -1229,6 +1231,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let context = Context {
 			address,
 			caller,
+			is_eof: false,
 			apparent_value: value,
 		};
 		let runtime = Runtime::new(

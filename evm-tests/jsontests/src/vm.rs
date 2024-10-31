@@ -59,6 +59,7 @@ impl Test {
 		evm::Context {
 			address: self.0.transaction.address.into(),
 			caller: self.0.transaction.sender.into(),
+			is_eof: false,
 			apparent_value: self.0.transaction.value.into(),
 		}
 	}

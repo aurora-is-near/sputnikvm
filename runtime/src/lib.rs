@@ -43,7 +43,7 @@ pub use evm_core::*;
 
 pub use crate::context::{CallScheme, Context, CreateScheme};
 pub use crate::handler::{Handler, Transfer};
-pub use crate::interrupt::{Resolve, ResolveCall, ResolveCreate};
+pub use crate::interrupt::{Resolve, ResolveCall, ResolveCreate, ResolveEOFCreate};
 
 use prelude::*;
 use primitive_types::H160;
@@ -70,6 +70,11 @@ macro_rules! step {
 						let resolve = ResolveCreate::new($self);
 						#[allow(unused_parens)]
 						$return $($err)*(Capture::Trap(Resolve::Create(interrupt, resolve)))
+					},
+					eval::Control::EOFCreateInterrupt(interrupt) => {
+						let resolve = ResolveEOFCreate::new($self);
+						#[allow(unused_parens)]
+						$return $($err)*(Capture::Trap(Resolve::EOFCreate(interrupt, resolve)))
 					},
 					eval::Control::Exit(exit) => {
 						$self.machine.exit(exit.clone().into());

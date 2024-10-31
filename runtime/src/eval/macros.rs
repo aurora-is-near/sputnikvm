@@ -72,3 +72,11 @@ macro_rules! as_usize_or_fail {
 		$v.as_usize()
 	}};
 }
+
+macro_rules! require_eof {
+	($runtime:expr) => {
+		if !$runtime.context.is_eof {
+			return Control::Exit(ExitError::EOFOpcodeDisabledInLegacy.into());
+		}
+	};
+}
