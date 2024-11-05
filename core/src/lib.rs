@@ -105,6 +105,24 @@ impl Machine {
 		&self.position
 	}
 
+	/// Get the code with offset and increment the program counter.
+	/// If code range is out of bound, return empty slice.
+	///
+	/// ## Errors
+	/// Returns `ExitReason` if the program counter is invalid.
+	pub fn get_code_and_inc_pc(&mut self, offset: usize) -> Result<&[u8], ExitReason> {
+		let position = match &self.position {
+			Ok(pos) => *pos,
+			Err(e) => return Err(e.clone()),
+		};
+		let data = self
+			.code
+			.get(position..position + offset)
+			.unwrap_or_default();
+		self.position = Ok(position + offset);
+		Ok(data)
+	}
+
 	/// Create a new machine with given code and data.
 	#[must_use]
 	pub fn new(

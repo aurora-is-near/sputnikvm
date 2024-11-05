@@ -1,4 +1,3 @@
-use super::eof;
 use crate::backend::Backend;
 use crate::executor::stack::precompile::{
 	PrecompileFailure, PrecompileHandle, PrecompileOutput, PrecompileSet,
@@ -14,6 +13,7 @@ use crate::{
 use core::{cmp::min, convert::Infallible};
 use evm_core::utils::U64_MAX;
 use evm_core::{ExitFatal, InterpreterHandler, Machine, Trap};
+use evm_runtime::eof;
 use evm_runtime::Resolve;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
@@ -816,7 +816,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			caller,
 			address,
 			apparent_value: value,
-			is_eof: false,
+			eof: None,
 		};
 
 		match self.call_inner(
@@ -1058,7 +1058,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 
 		// Decode EOF
-		let (_eof, input) = match eof::Eof::decode_surplus(init_code) {
+		let (eof, input) = match eof::Eof::decode_surplus(init_code) {
 			Ok(data) => data,
 			Err(e) => {
 				return Capture::Exit((ExitReason::Error(e.into()), Vec::new()));
@@ -1132,7 +1132,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let context = Context {
 			address,
 			caller,
-			is_eof: true,
+			eof: Some(eof),
 			apparent_value: value,
 		};
 		let runtime = Runtime::new(
@@ -1231,7 +1231,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let context = Context {
 			address,
 			caller,
-			is_eof: false,
+			eof: None,
 			apparent_value: value,
 		};
 		let runtime = Runtime::new(

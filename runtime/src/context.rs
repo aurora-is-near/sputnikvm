@@ -1,3 +1,4 @@
+use crate::eof::Eof;
 use primitive_types::{H160, H256, U256};
 
 /// Create scheme.
@@ -41,8 +42,8 @@ pub struct Context {
 	pub address: H160,
 	/// Caller of the EVM.
 	pub caller: H160,
-	/// EOF flag
-	pub is_eof: bool,
+	/// EOF data
+	pub eof: Option<Eof>,
 	/// Apparent value of the EVM.
 	pub apparent_value: U256,
 }

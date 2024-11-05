@@ -523,19 +523,19 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 		CallScheme::Call | CallScheme::StaticCall => Context {
 			address: to.into(),
 			caller: runtime.context.address,
-			is_eof: runtime.context.is_eof,
+			eof: runtime.context.eof.clone(),
 			apparent_value: value,
 		},
 		CallScheme::CallCode => Context {
 			address: runtime.context.address,
 			caller: runtime.context.address,
-			is_eof: runtime.context.is_eof,
+			eof: runtime.context.eof.clone(),
 			apparent_value: value,
 		},
 		CallScheme::DelegateCall => Context {
 			address: runtime.context.address,
 			caller: runtime.context.caller,
-			is_eof: runtime.context.is_eof,
+			eof: runtime.context.eof.clone(),
 			apparent_value: runtime.context.apparent_value,
 		},
 	};

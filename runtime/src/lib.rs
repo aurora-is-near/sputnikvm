@@ -1,7 +1,7 @@
 //! Runtime layer for EVM.
 
 #![deny(warnings)]
-#![forbid(unsafe_code, unused_variables)]
+#![forbid(unsafe_code)]
 #![deny(clippy::pedantic, clippy::nursery)]
 #![deny(clippy::as_conversions)]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -35,6 +35,7 @@ macro_rules! event {
 }
 
 mod context;
+pub mod eof;
 mod eval;
 mod handler;
 mod interrupt;

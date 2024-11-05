@@ -73,9 +73,22 @@ macro_rules! as_usize_or_fail {
 	}};
 }
 
+/// Converts a `U256` value to a `usize`, saturating to `MAX` if the value is too large.
+macro_rules! as_usize_saturated {
+	( $v:expr ) => {
+		if $v > crate::utils::USIZE_MAX {
+			usize::MAX
+		} else {
+			$v.as_usize()
+		}
+	};
+}
+
 macro_rules! require_eof {
 	($runtime:expr) => {
-		if !$runtime.context.is_eof {
+		if let Some(ref eof) = $runtime.context.eof {
+			eof
+		} else {
 			return Control::Exit(ExitError::EOFOpcodeDisabledInLegacy.into());
 		}
 	};

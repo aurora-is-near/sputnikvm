@@ -1,5 +1,5 @@
 //! EOF - EVM Object Format v1 [EIP-3540](https://eips.ethereum.org/EIPS/eip-3540)
-#![allow(dead_code)]
+#![allow(clippy::module_name_repetitions)]
 
 use crate::prelude::Vec;
 use evm_core::EofDecodeError;
@@ -17,7 +17,8 @@ const KIND_DATA: u8 = 4;
 /// Get `u16` value from slice by index range: `[index, index+1]`.
 /// NOTE: Index range should be valid.
 #[inline]
-const fn get_u16(input: &[u8], index: usize) -> u16 {
+#[must_use]
+pub const fn get_u16(input: &[u8], index: usize) -> u16 {
 	u16::from_be_bytes([input[index], input[index + 1]])
 }
 
@@ -32,6 +33,9 @@ pub struct Eof {
 
 impl Eof {
 	/// Decode EOF from raw bytes.
+	///
+	/// ## Errors
+	/// Returns EOF decode error
 	pub fn decode(input: &[u8]) -> Result<Self, EofDecodeError> {
 		let header = EofHeader::decode(input)?;
 		let body = EofBody::decode(input, &header)?;
@@ -39,6 +43,9 @@ impl Eof {
 	}
 
 	/// Decode EOF that have additional surplus bytes.
+	///
+	/// ## Errors
+	/// Returns EOF decode error with surplus
 	pub fn decode_surplus(input: &[u8]) -> Result<(Self, Vec<u8>), EofDecodeError> {
 		let header = EofHeader::decode(input)?;
 		let eof_size = header.body_size() + header.size();
@@ -48,6 +55,18 @@ impl Eof {
 		let (input, surplus_data) = input.split_at(eof_size);
 		let body = EofBody::decode(input, &header)?;
 		Ok((Self { header, body }, surplus_data.to_vec()))
+	}
+
+	/// Returns a slice of the raw bytes.
+	/// If offset is greater than the length of the raw bytes, an empty slice is returned.
+	/// If len is greater than the length of the raw bytes, the slice is truncated to the length of the raw bytes.
+	#[must_use]
+	pub fn data_slice(&self, offset: usize, len: usize) -> &[u8] {
+		self.body
+			.data_section
+			.get(offset..)
+			.and_then(|bytes| bytes.get(..core::cmp::min(len, bytes.len())))
+			.unwrap_or_default()
 	}
 }
 
@@ -68,11 +87,14 @@ pub struct EofHeader {
 	/// Sum of container sizes
 	pub sum_container_sizes: u16,
 	/// Stored header size in bytes. Not part of EOF Header.
-	header_size: usize,
+	pub(crate) header_size: usize,
 }
 
 impl EofHeader {
 	/// Decode EOF header from raw bytes.
+	///
+	/// ## Errors
+	/// Returns EOF header decode error
 	pub fn decode(input: &[u8]) -> Result<Self, EofDecodeError> {
 		// EOF header first input validation for 7 bytes
 		if input.len() < 7 {
@@ -181,6 +203,7 @@ impl EofHeader {
 	}
 
 	/// Returns body size. It is sum of code sizes, container sizes and data size.
+	#[must_use]
 	pub fn body_size(&self) -> usize {
 		usize::from(
 			self.types_size + self.sum_code_sizes + self.sum_container_sizes + self.data_size,
@@ -188,6 +211,7 @@ impl EofHeader {
 	}
 
 	/// Returns number of types.
+	#[must_use]
 	pub fn types_count(&self) -> usize {
 		usize::from(self.types_size / 4)
 	}
@@ -250,6 +274,9 @@ pub struct EofBody {
 
 impl EofBody {
 	/// Decode EOF container body from the given buffer and header.
+	///
+	/// ## Errors
+	/// Returns EOF decode body error
 	pub fn decode(input: &[u8], header: &EofHeader) -> Result<Self, EofDecodeError> {
 		let header_len = header.size();
 		let partial_body_len =
@@ -304,6 +331,7 @@ impl EofBody {
 	}
 
 	/// Decode types section from input.
+	#[allow(dead_code)]
 	fn decode_types_section(_input: &[u8]) -> Result<Vec<TypesSection>, EofDecodeError> {
 		todo!()
 		/*
@@ -348,6 +376,9 @@ pub struct TypesSection {
 impl TypesSection {
 	/// Decode the section for the input from index.
 	/// NOTE: Input data length should be already re-verified
+	///
+	/// ## Errors
+	/// Returns EOF decode error
 	#[inline]
 	pub fn decode(index: usize, input: &[u8]) -> Result<Self, EofDecodeError> {
 		let inputs = input[index];
@@ -830,5 +861,57 @@ mod tests {
 
 		let eof = Eof::decode_surplus(&input);
 		assert!(matches!(eof, Err(EofDecodeError::MissingInput)));
+	}
+
+	#[test]
+	fn test_data_slice_within_bounds() {
+		let eof_body = EofBody {
+			data_section: vec![1, 2, 3, 4, 5],
+			..Default::default()
+		};
+		let eof = Eof {
+			body: eof_body,
+			..Default::default()
+		};
+		assert_eq!(eof.data_slice(1, 3), &[2, 3, 4]);
+	}
+
+	#[test]
+	fn test_data_slice_out_of_bounds_offset() {
+		let eof_body = EofBody {
+			data_section: vec![1, 2, 3, 4, 5],
+			..Default::default()
+		};
+		let eof = Eof {
+			body: eof_body,
+			..Default::default()
+		};
+		assert_eq!(eof.data_slice(10, 3), &[]);
+	}
+
+	#[test]
+	fn test_data_slice_out_of_bounds_length() {
+		let eof_body = EofBody {
+			data_section: vec![1, 2, 3, 4, 5],
+			..Default::default()
+		};
+		let eof = Eof {
+			body: eof_body,
+			..Default::default()
+		};
+		assert_eq!(eof.data_slice(2, 10), &[3, 4, 5]);
+	}
+
+	#[test]
+	fn test_data_slice_empty_data_section() {
+		let eof_body = EofBody {
+			data_section: vec![],
+			..Default::default()
+		};
+		let eof = Eof {
+			body: eof_body,
+			..Default::default()
+		};
+		assert_eq!(eof.data_slice(0, 3), &[]);
 	}
 }
