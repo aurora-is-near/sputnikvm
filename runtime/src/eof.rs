@@ -1,4 +1,7 @@
-//! EOF - EVM Object Format v1 [EIP-3540](https://eips.ethereum.org/EIPS/eip-3540)
+//! # EOF - EVM Object Format v1
+//!
+//! - [EIP-3540](https://eips.ethereum.org/EIPS/eip-3540)
+//! - [EIP-4750 Specification: Type Section](https://eips.ethereum.org/EIPS/eip-4750#type-section)
 #![allow(clippy::module_name_repetitions)]
 
 use crate::prelude::Vec;
@@ -24,7 +27,8 @@ pub const fn get_u16(input: &[u8], index: usize) -> u16 {
 
 /// EVM Object Format (EOF) container.
 ///
-/// It consists of a header, bod.
+/// It consists of a header, body.
+/// <https://eips.ethereum.org/EIPS/eip-3540#container>
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Eof {
 	pub header: EofHeader,
@@ -71,6 +75,7 @@ impl Eof {
 }
 
 /// EOF Header containing
+/// <https://eips.ethereum.org/EIPS/eip-3540#header>
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EofHeader {
 	/// Size of EOF types section.
@@ -263,6 +268,7 @@ impl EofHeader {
 }
 
 /// EOF container body.
+/// <https://eips.ethereum.org/EIPS/eip-3540#body>
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EofBody {
 	pub types_section: Vec<TypesSection>,
@@ -361,6 +367,7 @@ impl EofBody {
 }
 
 /// Types section that contains stack information for matching code section.
+/// [EIP-4750 Specification: Type Section](https://eips.ethereum.org/EIPS/eip-4750#type-section)
 #[derive(Debug, Clone, Default, PartialEq, Eq, Copy)]
 pub struct TypesSection {
 	/// inputs - 1 byte - `0x00-0x7F`: number of stack elements the code section consumes

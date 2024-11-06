@@ -73,14 +73,33 @@ pub fn data_size<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control
 /// 2, Performs memory expansion to `mem_offset + size` and deducts memory expansion cost.
 /// 3. Reads `[offset:offset+size]` segment from the data section and writes it to memory starting at offset `mem_offset`.
 /// 4. If `offset + size` is greater than data section size, 0 bytes will be copied for bytes after the end of the data section.
-pub fn data_copy<H: Handler>(runtime: &Runtime, _handler: &mut H) -> Control<H> {
-	require_eof!(runtime);
-	unreachable!()
+pub fn data_copy<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	let eof = require_eof!(runtime);
+	pop_u256!(runtime, mem_offset, offset, size);
+
+	if size == U256::zero() {
+		return Control::Continue;
+	}
+	let size = as_usize_or_fail!(size);
+	let mem_offset = as_usize_or_fail!(mem_offset);
+
+	try_or_fail!(runtime.machine.memory_mut().resize_offset(mem_offset, size));
+	match runtime
+		.machine
+		.memory_mut()
+		.copy_large(mem_offset, offset, size, &eof.body.data_section)
+	{
+		Ok(()) => (),
+		Err(e) => return Control::Exit(e.into()),
+	};
+
+	Control::Continue
 }
 
 #[cfg(test)]
 mod tests {
 	#![allow(unused_variables)]
+	#![allow(clippy::cast_possible_truncation, clippy::as_conversions)]
 
 	use super::*;
 	use crate::eof::{Eof, EofHeader};
@@ -229,33 +248,64 @@ mod tests {
 		}
 	}
 
-	fn create_eof() -> Eof {
+	fn create_eof(data: Vec<u8>) -> Eof {
 		let header = EofHeader {
 			types_size: 8,
 			code_sizes: vec![2, 4],
 			container_sizes: vec![1, 3],
-			data_size: 3,
+			data_size: data.len() as u16,
 			sum_code_sizes: 6,
 			sum_container_sizes: 4,
 			header_size: 24,
 		};
 		let input = vec![
-			0xEF, 0x00, 0x01, // HEADER: meta information
-			0x01, 0x00, 0x08, // Types size
-			0x02, 0x00, 0x02, // Code size
-			0x00, 0x02, 0x00, 0x04, // Code section
-			0x03, 0x00, 0x02, // Container size
-			0x00, 0x01, 0x00, 0x03, // Container section
-			0x04, 0x00, 0x03, // Data size
-			0x00, // Terminator
-			0x1A, 0x0C, 0x01, 0xFD, // BODY: types section data [1]
-			0x3E, 0x6D, 0x02, 0x9A, // types section data [2]
-			0xA9, 0xE0, // Code size data [1]
-			0xCF, 0x39, 0x8A, 0x3B, // Code size data [2]
+			0xEF,
+			0x00,
+			0x01, // HEADER: meta information
+			0x01,
+			0x00,
+			0x08, // Types size
+			0x02,
+			0x00,
+			0x02, // Code size
+			0x00,
+			0x02,
+			0x00,
+			0x04, // Code section
+			0x03,
+			0x00,
+			0x02, // Container size
+			0x00,
+			0x01,
+			0x00,
+			0x03, // Container section
+			0x04,
+			0x00,
+			data.len() as u8, // Data size
+			0x00,             // Terminator
+			0x1A,
+			0x0C,
+			0x01,
+			0xFD, // BODY: types section data [1]
+			0x3E,
+			0x6D,
+			0x02,
+			0x9A, // types section data [2]
+			0xA9,
+			0xE0, // Code size data [1]
+			0xCF,
+			0x39,
+			0x8A,
+			0x3B, // Code size data [2]
 			0xB8, // Container size data [1]
-			0xE7, 0xB3, 0x7C, // Container size data [2]
-			0x3B, 0x5F, 0xE3, // Data size data
-		];
+			0xE7,
+			0xB3,
+			0x7C, // Container size data [2]
+		]
+		.into_iter()
+		.chain(data)
+		.collect::<Vec<_>>();
+
 		let decoded_header = EofHeader::decode(&input);
 		assert_eq!(Ok(header.clone()), decoded_header);
 
@@ -275,17 +325,76 @@ mod tests {
 				apparent_value: U256::zero(),
 			},
 			1024,
-			10000,
+			32 * 1024,
 		)
 	}
 
 	#[test]
-	fn test_data_size() {
-		let mut runtime = init_runtime(vec![], Some(create_eof()));
+	fn test_data_load_not_eof() {
+		let mut runtime = init_runtime(vec![], None);
 
-		let control = data_size(&mut runtime, &mut MockHandler);
+		let control = data_load(&mut runtime, &mut MockHandler);
+		assert!(matches!(
+			control,
+			Control::Exit(ExitReason::Error(ExitError::EOFOpcodeDisabledInLegacy))
+		));
+	}
+
+	#[test]
+	fn test_data_load_from_index_1() {
+		let initial_data = vec![1, 2, 3];
+		let mut expected_data = [0u8; 32];
+		let expected_slice = &[2, 3];
+		expected_data[..expected_slice.len()].copy_from_slice(expected_slice);
+
+		let mut runtime = init_runtime(vec![], Some(create_eof(initial_data)));
+		runtime.machine.stack_mut().push(U256::from(1)).unwrap();
+
+		let control = data_load(&mut runtime, &mut MockHandler);
+		let res = runtime.machine.stack().peek(0).unwrap();
+
 		assert!(matches!(control, Control::Continue));
-		assert_eq!(runtime.machine.stack().peek(0).unwrap(), U256::from(3));
+		assert_eq!(
+			runtime.machine.stack().peek(0).unwrap(),
+			U256::from(expected_data)
+		);
+	}
+
+	#[test]
+	fn test_data_load_full_data_from_index_0() {
+		let mut initial_data = vec![0; 40];
+		let expected_data: Vec<u8> = (1..=32).collect();
+		initial_data.splice(0..expected_data.len(), expected_data.iter().copied());
+
+		let mut runtime = init_runtime(vec![], Some(create_eof(initial_data)));
+		runtime.machine.stack_mut().push(U256::from(0)).unwrap();
+
+		let control = data_load(&mut runtime, &mut MockHandler);
+		let res = runtime.machine.stack().peek(0).unwrap();
+
+		assert!(matches!(control, Control::Continue));
+		assert_eq!(
+			runtime.machine.stack().peek(0).unwrap(),
+			U256::from(expected_data.as_slice())
+		);
+	}
+
+	#[test]
+	fn test_data_load_out_of_bound() {
+		let initial_data = vec![1, 2, 3, 4, 5];
+		let expected_data = [0u8; 32];
+
+		let mut runtime = init_runtime(vec![], Some(create_eof(initial_data)));
+		runtime.machine.stack_mut().push(U256::from(7)).unwrap();
+
+		let control = data_load(&mut runtime, &mut MockHandler);
+		let res = runtime.machine.stack().peek(0).unwrap();
+
+		assert!(matches!(control, Control::Continue));
+		assert_eq!(
+			runtime.machine.stack().peek(0).unwrap(),
+			U256::from(expected_data)
+		);
 	}
 
 	#[test]
@@ -297,5 +406,92 @@ mod tests {
 			control,
 			Control::Exit(ExitReason::Error(ExitError::EOFOpcodeDisabledInLegacy))
 		));
+	}
+
+	#[test]
+	fn test_data_size() {
+		let mut runtime = init_runtime(vec![], Some(create_eof(vec![1, 2, 3])));
+
+		let control = data_size(&mut runtime, &mut MockHandler);
+		assert!(matches!(control, Control::Continue));
+		assert_eq!(runtime.machine.stack().peek(0).unwrap(), U256::from(3));
+	}
+
+	#[test]
+	fn test_data_loadn_not_eof() {
+		let mut runtime = init_runtime(vec![], None);
+
+		let control = data_loadn(&mut runtime, &mut MockHandler);
+		assert!(matches!(
+			control,
+			Control::Exit(ExitReason::Error(ExitError::EOFOpcodeDisabledInLegacy))
+		));
+	}
+
+	#[test]
+	fn test_data_loadn_with_exact_code() {
+		let code = vec![0x0, 0x05, 0xCF, 0xFE];
+		let mut initial_data = vec![0; 40];
+		let expected_data: Vec<u8> = (1..=32).collect();
+		initial_data.splice(5..5 + expected_data.len(), expected_data.iter().copied());
+
+		let mut runtime = init_runtime(code, Some(create_eof(initial_data)));
+
+		let control = data_loadn(&mut runtime, &mut MockHandler);
+		let res = runtime.machine.stack().peek(0).unwrap();
+
+		assert!(matches!(control, Control::Continue));
+		assert_eq!(
+			runtime.machine.stack().peek(0).unwrap(),
+			U256::from(expected_data.as_slice())
+		);
+	}
+
+	#[test]
+	fn test_data_copy_not_eof() {
+		let mut runtime = init_runtime(vec![], None);
+
+		let control = data_copy(&mut runtime, &mut MockHandler);
+		assert!(matches!(
+			control,
+			Control::Exit(ExitReason::Error(ExitError::EOFOpcodeDisabledInLegacy))
+		));
+	}
+
+	#[test]
+	fn test_data_copy_zero_size() {
+		let mut initial_data = vec![0; 40];
+		let expected_data: Vec<u8> = (1..=32).collect();
+		initial_data.splice(3..3 + expected_data.len(), expected_data.iter().copied());
+
+		let mut runtime = init_runtime(vec![], Some(create_eof(initial_data)));
+		runtime.machine.stack_mut().push(U256::from(0)).unwrap();
+		runtime.machine.stack_mut().push(U256::from(3)).unwrap();
+		runtime.machine.stack_mut().push(U256::from(10)).unwrap();
+		assert_eq!(runtime.machine.memory().effective_len(), 0);
+
+		let control = data_copy(&mut runtime, &mut MockHandler);
+
+		assert!(matches!(control, Control::Continue));
+		assert_eq!(runtime.machine.memory().data().len(), 0);
+	}
+
+	#[test]
+	fn test_data_copy() {
+		let mut initial_data = vec![0; 40];
+		let expected_data: Vec<u8> = (1..=10).collect();
+		initial_data.splice(3..3 + expected_data.len(), expected_data.iter().copied());
+
+		let mut runtime = init_runtime(vec![], Some(create_eof(initial_data)));
+		runtime.machine.stack_mut().push(U256::from(10)).unwrap();
+		runtime.machine.stack_mut().push(U256::from(3)).unwrap();
+		runtime.machine.stack_mut().push(U256::from(5)).unwrap();
+		assert_eq!(runtime.machine.memory().data().len(), 0);
+
+		let control = data_copy(&mut runtime, &mut MockHandler);
+
+		assert!(matches!(control, Control::Continue));
+		assert_eq!(runtime.machine.memory().data().len(), 15);
+		assert_eq!(runtime.machine.memory().get(5, 10), expected_data);
 	}
 }

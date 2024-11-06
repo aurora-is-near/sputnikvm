@@ -846,6 +846,20 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::PUSH0 if config.has_push0 => GasCost::Base,
 
+		Opcode::DATALOAD if config.has_eof => GasCost::DataLoad,
+		Opcode::DATALOAD => GasCost::Invalid(opcode),
+
+		Opcode::DATALOADN if config.has_eof => GasCost::VeryLow,
+		Opcode::DATALOADN => GasCost::Invalid(opcode),
+
+		Opcode::DATASIZE if config.has_eof => GasCost::Base,
+		Opcode::DATASIZE => GasCost::Invalid(opcode),
+
+		Opcode::DATACOPY if config.has_eof => GasCost::VeryLowCopy {
+			len: stack.peek(2)?,
+		},
+		Opcode::DATACOPY => GasCost::Invalid(opcode),
+
 		_ => GasCost::Invalid(opcode),
 	};
 
@@ -900,6 +914,8 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		Opcode::DELEGATECALL | Opcode::STATICCALL => {
 			Some(peek_memory_cost(stack, 2, 3)?.join(peek_memory_cost(stack, 4, 5)?))
 		}
+
+		Opcode::DATACOPY => Some(peek_memory_cost(stack, 0, 2)?),
 
 		_ => None,
 	};
@@ -1050,6 +1066,8 @@ impl<'config> Inner<'config> {
 			GasCost::VeryLow => u64::from(consts::G_VERYLOW),
 			GasCost::Low => u64::from(consts::G_LOW),
 			GasCost::Invalid(opcode) => return Err(ExitError::InvalidCode(opcode)),
+
+			GasCost::DataLoad => u64::from(consts::G_DATA_LOAD),
 
 			GasCost::ExtCodeSize {
 				target_is_cold,
@@ -1258,6 +1276,8 @@ pub enum GasCost {
 		target_is_cold: bool,
 	},
 	WarmStorageRead,
+	/// Gas for EOF `DATALOAD`
+	DataLoad,
 }
 
 /// Storage opcode will access. Used for tracking accessed storage (EIP-2929).
