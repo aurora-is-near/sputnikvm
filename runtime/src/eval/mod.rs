@@ -1,6 +1,6 @@
 #[macro_use]
 mod macros;
-mod data;
+mod eof;
 mod system;
 
 use crate::prelude::*;
@@ -69,19 +69,19 @@ pub fn eval<H: Handler>(state: &mut Runtime, opcode: Opcode, handler: &mut H) ->
 		Opcode::TSTORE => system::tstore(state, handler),
 		Opcode::MCOPY => system::mcopy(state, handler),
 		//== EOF Related Opcodes ==//
-		Opcode::DATALOAD => data::data_load(state, handler),
-		Opcode::DATALOADN => data::data_loadn(state, handler),
-		Opcode::DATASIZE => data::data_size(state, handler),
-		Opcode::DATACOPY => data::data_copy(state, handler),
+		Opcode::DATALOAD => eof::data::data_load(state),
+		Opcode::DATALOADN => eof::data::data_loadn(state),
+		Opcode::DATASIZE => eof::data::data_size(state),
+		Opcode::DATACOPY => eof::data::data_copy(state),
 		Opcode::RJUMP => system::rjump(state, handler),
 		Opcode::RJUMPI => system::rjumpi(state, handler),
 		Opcode::RJUMPV => system::rjumpv(state, handler),
 		Opcode::CALLF => system::callf(state, handler),
 		Opcode::RETF => system::retf(state, handler),
 		Opcode::JUMPF => system::jumpf(state, handler),
-		Opcode::DUPN => system::dupn(state, handler),
-		Opcode::SWAPN => system::swapn(state, handler),
-		Opcode::EXCHANGE => system::exchange(state, handler),
+		Opcode::DUPN => eof::stack::dupn(state),
+		Opcode::SWAPN => eof::stack::swapn(state),
+		Opcode::EXCHANGE => eof::stack::exchange(state),
 		Opcode::EOFCREATE => system::eof_create(state, handler),
 		Opcode::RETURNCONTRACT => system::return_contract(state, handler),
 		Opcode::RETURNDATALOAD => system::return_data_load(state, handler),

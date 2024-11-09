@@ -201,13 +201,21 @@ pub fn returndatacopy<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 		.machine
 		.memory_mut()
 		.resize_offset(memory_offset, len));
-	if data_offset
-		.checked_add(len.into())
-		.map_or(true, |l| l > U256::from(runtime.return_data_buffer.len()))
-	{
+
+	// Old legacy behavior is to panic if data_end is out of scope of return buffer.
+	// This behavior is changed in EOF.
+	// EIP-7069: modifies behavior of RETURNDATACOPY to not halt if data_end is out of scope of return buffer.
+	let is_eof = runtime.context.eof.is_some();
+	if data_offset.checked_add(len.into()).map_or(true, |l| {
+		!is_eof && l > U256::from(runtime.return_data_buffer.len())
+	}) {
 		return Control::Exit(ExitError::OutOfOffset.into());
 	}
 
+	// According to EIP-7069: `data_offset + len > len(returndata buffer)`
+	// if it is not then set the remaining `offset + size - len(returndata buffer)`
+	// memory bytes after the copied ones to zero.
+	// NOTE: `copy_large` will fill with zeros automatically if data out of bounds.
 	match runtime.machine.memory_mut().copy_large(
 		memory_offset,
 		data_offset,
@@ -614,21 +622,6 @@ pub fn retf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> 
 
 #[allow(dead_code)]
 pub fn jumpf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
-pub fn dupn<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
-pub fn swapn<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
-pub fn exchange<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
 	todo!()
 }
 
