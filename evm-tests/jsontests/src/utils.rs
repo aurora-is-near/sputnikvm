@@ -4,9 +4,7 @@ use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 
 pub fn u256_to_h256(u: U256) -> H256 {
-	let mut h = H256::default();
-	u.to_big_endian(&mut h[..]);
-	h
+	H256(u.to_big_endian())
 }
 
 pub fn unwrap_to_account(s: &ethjson::spec::Account) -> MemoryAccount {
@@ -106,11 +104,14 @@ pub fn check_valid_hash(h: &H256, b: &BTreeMap<H160, MemoryAccount>) -> (bool, H
 	let tree = b
 		.iter()
 		.map(|(address, account)| {
-			let storage_root = ethereum::util::sec_trie_root(
-				account
-					.storage
-					.iter()
-					.map(|(k, v)| (k, rlp::encode(&U256::from_big_endian(&v[..])))),
+			let storage_root = H256(
+				ethereum::util::sec_trie_root(
+					account
+						.storage
+						.iter()
+						.map(|(k, v)| (k, rlp::encode(&U256::from_big_endian(&v[..])))),
+				)
+				.0,
 			);
 			let code_hash = H256::from_slice(Keccak256::digest(&account.code).as_slice());
 
@@ -126,7 +127,7 @@ pub fn check_valid_hash(h: &H256, b: &BTreeMap<H160, MemoryAccount>) -> (bool, H
 		})
 		.collect::<Vec<_>>();
 
-	let root = ethereum::util::sec_trie_root(tree);
+	let root = H256(ethereum::util::sec_trie_root(tree).0);
 	let expect = h;
 	(root == *expect, root)
 }
@@ -321,8 +322,7 @@ pub mod transaction {
 
 				// all versioned blob hashes must start with VERSIONED_HASH_VERSION_KZG
 				for blob in test_tx.blob_versioned_hashes.iter() {
-					let mut blob_hash = H256([0; 32]);
-					blob.to_big_endian(&mut blob_hash[..]);
+					let blob_hash = H256(blob.to_big_endian());
 					if blob_hash[0] != super::eip_4844::VERSIONED_HASH_VERSION_KZG {
 						return Err(InvalidTxReason::BlobVersionNotSupported);
 					}

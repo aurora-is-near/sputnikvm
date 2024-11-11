@@ -1288,8 +1288,6 @@ fn test_run(
 					);
 					for (addr, acc) in backend.state().clone() {
 						// Decode balance
-						let mut write_buf = [0u8; 32];
-						acc.balance.to_big_endian(&mut write_buf[..]);
 						let balance = acc.balance.to_string();
 
 						println!(
