@@ -860,6 +860,12 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::DATACOPY => GasCost::Invalid(opcode),
 
+		Opcode::SWAPN | Opcode::DUPN | Opcode::EXCHANGE if config.has_eof => GasCost::VeryLow,
+		Opcode::SWAPN | Opcode::DUPN | Opcode::EXCHANGE => GasCost::Invalid(opcode),
+
+		Opcode::RETURNDATALOAD if config.has_eof => GasCost::VeryLow,
+		Opcode::RETURNDATALOAD => GasCost::Invalid(opcode),
+
 		_ => GasCost::Invalid(opcode),
 	};
 

@@ -175,6 +175,8 @@ pub enum ExitError {
 	EOFDecodeError(EofDecodeError),
 	#[cfg_attr(feature = "with-codec", codec(index = 18))]
 	EOFOpcodeDisabledInLegacy,
+	#[cfg_attr(feature = "with-codec", codec(index = 19))]
+	InvalidEXTCALLTarget,
 }
 
 impl From<ExitError> for ExitReason {

@@ -629,23 +629,3 @@ pub fn jumpf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H>
 pub fn return_contract<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
 	todo!()
 }
-
-#[allow(dead_code)]
-pub fn return_data_load<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
-pub fn ext_call<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
-pub fn ext_delegate_call<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
-pub fn ext_static_call<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}

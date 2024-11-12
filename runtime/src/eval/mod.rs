@@ -84,10 +84,10 @@ pub fn eval<H: Handler>(state: &mut Runtime, opcode: Opcode, handler: &mut H) ->
 		Opcode::EXCHANGE => eof::stack::exchange(state),
 		Opcode::EOFCREATE => system::eof_create(state, handler),
 		Opcode::RETURNCONTRACT => system::return_contract(state, handler),
-		Opcode::RETURNDATALOAD => system::return_data_load(state, handler),
-		Opcode::EXTCALL => system::ext_call(state, handler),
-		Opcode::EXTDELEGATECALL => system::ext_delegate_call(state, handler),
-		Opcode::EXTSTATICCALL => system::ext_static_call(state, handler),
+		Opcode::RETURNDATALOAD => eof::ext::return_data_load(state, handler),
+		Opcode::EXTCALL => eof::ext::ext_call(state, handler),
+		Opcode::EXTDELEGATECALL => eof::ext::ext_delegate_call(state, handler),
+		Opcode::EXTSTATICCALL => eof::ext::ext_static_call(state, handler),
 		_ => handle_other(state, opcode, handler),
 	}
 }
