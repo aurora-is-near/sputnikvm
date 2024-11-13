@@ -1,6 +1,7 @@
 //! A module containing the `MaybeBorrowed` enum. See its documentation for details.
 
 /// Similar to `Cow` from the standard library, but without requiring `T: Clone`.
+///
 /// Instead of "copy on write", this data structure represents a type that can create
 /// `&mut T`, either because it is `&mut T`, or because it is an owned `T`.
 /// This is also distinct from the `BorrowMut` trait in the standard library because

@@ -11,11 +11,7 @@ macro_rules! pop_h256 {
 	( $machine:expr, $( $x:ident ),* ) => (
 		$(
 			let $x = match $machine.machine.stack_mut().pop() {
-				Ok(value) => {
-					let mut res = H256([0; 32]);
-					value.to_big_endian(&mut res[..]);
-					res
-				},
+				Ok(value) => H256(value.to_big_endian()),
 				Err(e) => return Control::Exit(e.into()),
 			};
 		)*

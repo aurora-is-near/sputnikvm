@@ -73,16 +73,14 @@ pub fn caller<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 }
 
 pub fn callvalue<H: Handler>(runtime: &mut Runtime) -> Control<H> {
-	let mut ret = H256::default();
-	runtime.context.apparent_value.to_big_endian(&mut ret[..]);
+	let ret = H256(runtime.context.apparent_value.to_big_endian());
 	push_h256!(runtime, ret);
 
 	Control::Continue
 }
 
 pub fn gasprice<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	let mut ret = H256::default();
-	handler.gas_price().to_big_endian(&mut ret[..]);
+	let ret = H256(handler.gas_price().to_big_endian());
 	push_h256!(runtime, ret);
 
 	Control::Continue
@@ -302,11 +300,7 @@ pub fn sstore<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> 
 pub fn tload<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
 	// Peek index from the top of the stack
 	let index = match runtime.machine.stack().peek(0) {
-		Ok(value) => {
-			let mut h = H256::default();
-			value.to_big_endian(&mut h[..]);
-			h
-		}
+		Ok(value) => H256(value.to_big_endian()),
 		Err(e) => return Control::Exit(e.into()),
 	};
 	// Load value from transient storage

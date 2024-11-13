@@ -32,7 +32,7 @@ pub fn data_load<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 	let mut data = [0u8; 32];
 	data[..slice.len()].copy_from_slice(slice);
 
-	push_u256!(runtime, U256::from(data));
+	push_u256!(runtime, U256::from_big_endian(data.as_slice()));
 	Control::Continue
 }
 
@@ -51,7 +51,7 @@ pub fn data_loadn<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 	let offset = usize::from(eof::get_u16(raw_offset, 0));
 	let data = eof.data_slice(offset, 32);
 
-	push_u256!(runtime, U256::from(data));
+	push_u256!(runtime, U256::from_big_endian(data));
 	Control::Continue
 }
 
@@ -99,14 +99,13 @@ pub fn data_copy<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::eval::eof::mock;
 	use crate::eval::eof::mock::{create_eof, init_runtime, MockHandler};
 	use evm_core::ExitReason;
 	use primitive_types::U256;
 
 	#[test]
 	fn test_data_load_not_eof() {
-		let mut runtime = mock::init_runtime(vec![], None);
+		let mut runtime = init_runtime(vec![], None);
 
 		let control = data_load::<MockHandler>(&mut runtime);
 		assert!(matches!(
@@ -129,7 +128,7 @@ mod tests {
 		let res = runtime.machine.stack().peek(0).unwrap();
 
 		assert!(matches!(control, Control::Continue));
-		assert_eq!(res, U256::from(expected_data));
+		assert_eq!(res, U256::from_big_endian(expected_data.as_slice()));
 	}
 
 	#[test]
@@ -145,7 +144,7 @@ mod tests {
 		let res = runtime.machine.stack().peek(0).unwrap();
 
 		assert!(matches!(control, Control::Continue));
-		assert_eq!(res, U256::from(expected_data.as_slice()));
+		assert_eq!(res, U256::from_big_endian(expected_data.as_slice()));
 	}
 
 	#[test]
@@ -160,7 +159,7 @@ mod tests {
 		let res = runtime.machine.stack().peek(0).unwrap();
 
 		assert!(matches!(control, Control::Continue));
-		assert_eq!(res, U256::from(expected_data));
+		assert_eq!(res, U256::from_big_endian(expected_data.as_slice()));
 	}
 
 	#[test]
@@ -207,7 +206,7 @@ mod tests {
 		let res = runtime.machine.stack().peek(0).unwrap();
 
 		assert!(matches!(control, Control::Continue));
-		assert_eq!(res, U256::from(expected_data.as_slice()));
+		assert_eq!(res, U256::from_big_endian(expected_data.as_slice()));
 	}
 
 	#[test]
