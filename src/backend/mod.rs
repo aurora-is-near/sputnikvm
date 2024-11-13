@@ -22,7 +22,17 @@ pub struct Basic {
 	pub nonce: U256,
 }
 
-pub use ethereum::Log;
+#[derive(Clone, Debug, PartialEq, Eq, Default, rlp::RlpEncodable, rlp::RlpDecodable)]
+#[cfg_attr(
+	feature = "with-codec",
+	derive(scale_codec::Encode, scale_codec::Decode, scale_info::TypeInfo)
+)]
+#[cfg_attr(feature = "with-serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Log {
+	pub address: H160,
+	pub topics: Vec<H256>,
+	pub data: Vec<u8>,
+}
 
 /// Apply state operation.
 #[derive(Clone, Debug)]
