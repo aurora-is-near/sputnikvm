@@ -73,17 +73,29 @@ pub fn ext_call<H: Handler>(
 	} else {
 		runtime.machine.memory().get(in_offset, in_len)
 	};
-	let context = Context {
-		address: to_address,
-		caller: runtime.context.address,
-		eof: runtime.context.eof.clone(),
-		apparent_value: value,
+	let context = match scheme {
+		ExtCallScheme::ExtCall | ExtCallScheme::ExtStaticCall => Context {
+			address: to_address,
+			caller: runtime.context.address,
+			eof: runtime.context.eof.clone(),
+			apparent_value: value,
+		},
+		ExtCallScheme::ExtDelegateCall => Context {
+			address: runtime.context.address,
+			caller: runtime.context.caller,
+			eof: runtime.context.eof.clone(),
+			apparent_value: runtime.context.apparent_value,
+		},
 	};
-	let transfer = Some(Transfer {
-		source: runtime.context.address,
-		target: to_address,
-		value,
-	});
+	let transfer = if scheme == ExtCallScheme::ExtCall {
+		Some(Transfer {
+			source: runtime.context.address,
+			target: to_address,
+			value,
+		})
+	} else {
+		None
+	};
 
 	// Calculate the gas available to callee as caller’s
 	// remaining gas reduced by max(ceil(gas/64), MIN_RETAINED_GAS) (MIN_RETAINED_GAS is 5000).
