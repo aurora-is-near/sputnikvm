@@ -7,6 +7,10 @@
 use crate::prelude::Vec;
 use evm_core::EofDecodeError;
 
+/// EIP-7069
+pub const MIN_RETAINED_GAS: u64 = 5000;
+pub const MIN_CALLEE_GAS: u64 = 2300;
+
 /// `EOFv1` magic number
 pub const EOF_MAGIC: &[u8; 2] = &[0xEF, 0x00];
 

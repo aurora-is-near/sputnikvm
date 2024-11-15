@@ -35,6 +35,18 @@ pub enum CallScheme {
 	StaticCall,
 }
 
+/// Ext*Call scheme (EIP-7069).
+#[allow(clippy::enum_variant_names)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum ExtCallScheme {
+	/// `EXTCALL`
+	ExtCall,
+	/// `EXTDELEGATECALL`
+	ExtDelegateCall,
+	/// `EXTSTATICCALL`
+	ExtStaticCall,
+}
+
 /// Context of the runtime.
 #[derive(Clone, Debug)]
 pub struct Context {

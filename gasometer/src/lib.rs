@@ -844,6 +844,21 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			}
 		}
 
+		Opcode::EXTCALL if !is_static || (is_static && stack.peek(1)? == U256::zero()) => {
+			let target = stack.peek_h256(1)?.into();
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
+			GasCost::Call {
+				value: stack.peek(2)?,
+				gas: stack.peek(0)?,
+				target_is_cold,
+				delegated_designator_is_cold,
+				target_exists: {
+					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
+					handler.exists(target)
+				},
+			}
+		}
+
 		Opcode::PUSH0 if config.has_push0 => GasCost::Base,
 
 		Opcode::DATALOAD if config.has_eof => GasCost::DataLoad,
@@ -994,7 +1009,7 @@ impl<'config> Inner<'config> {
 				target_exists,
 				..
 			} => costs::call_cost(
-				value,
+				!value.is_zero(),
 				target_is_cold,
 				delegated_designator_is_cold,
 				true,
@@ -1009,7 +1024,7 @@ impl<'config> Inner<'config> {
 				target_exists,
 				..
 			} => costs::call_cost(
-				value,
+				!value.is_zero(),
 				target_is_cold,
 				delegated_designator_is_cold,
 				true,
@@ -1023,7 +1038,7 @@ impl<'config> Inner<'config> {
 				target_exists,
 				..
 			} => costs::call_cost(
-				U256::zero(),
+				false,
 				target_is_cold,
 				delegated_designator_is_cold,
 				false,
@@ -1037,10 +1052,26 @@ impl<'config> Inner<'config> {
 				target_exists,
 				..
 			} => costs::call_cost(
-				U256::zero(),
+				false,
 				target_is_cold,
 				delegated_designator_is_cold,
 				false,
+				true,
+				!target_exists,
+				self.config,
+			),
+
+			GasCost::ExtCall {
+				value,
+				target_is_cold,
+				delegated_designator_is_cold,
+				target_exists,
+			} => costs::ext_call_cost(
+				gas,
+				!value.is_zero(),
+				target_is_cold,
+				delegated_designator_is_cold,
+				true,
 				true,
 				!target_exists,
 				self.config,
@@ -1216,6 +1247,18 @@ pub enum GasCost {
 		/// Whether the target exists.
 		target_exists: bool,
 	},
+	/// Gas cost for `EXTCALL`.
+	ExtCall {
+		/// Call value.
+		value: U256,
+		/// True if target has not been previously accessed in this transaction
+		target_is_cold: bool,
+		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
+		delegated_designator_is_cold: Option<bool>,
+		/// Whether the target exists.
+		target_exists: bool,
+	},
+
 	/// Gas cost for `SUICIDE`.
 	Suicide {
 		/// Value.

@@ -272,7 +272,7 @@ pub fn suicide_cost(value: U256, is_cold: bool, target_exists: bool, config: &Co
 
 #[allow(clippy::fn_params_excessive_bools)]
 pub fn call_cost(
-	value: U256,
+	transfers_value: bool,
 	is_cold: bool,
 	delegated_designator_is_cold: Option<bool>,
 	is_call_or_callcode: bool,
@@ -280,7 +280,6 @@ pub fn call_cost(
 	new_account: bool,
 	config: &Config,
 ) -> u64 {
-	let transfers_value = value != U256::default();
 	address_access_cost(
 		is_cold,
 		delegated_designator_is_cold,
@@ -288,6 +287,34 @@ pub fn call_cost(
 		config,
 	) + xfer_cost(is_call_or_callcode, transfers_value)
 		+ new_cost(is_call_or_staticcall, new_account, transfers_value, config)
+}
+
+#[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)]
+pub fn ext_call_cost(
+	remain_gas: u64,
+	transfers_value: bool,
+	is_cold: bool,
+	delegated_designator_is_cold: Option<bool>,
+	is_call_or_callcode: bool,
+	is_call_or_staticcall: bool,
+	new_account: bool,
+	config: &Config,
+) -> u64 {
+	let ext_call_gas = remain_gas.saturating_sub(core::cmp::max(
+		remain_gas / 64,
+		evm_runtime::eof::MIN_RETAINED_GAS,
+	));
+
+	ext_call_gas
+		+ call_cost(
+			transfers_value,
+			is_cold,
+			delegated_designator_is_cold,
+			is_call_or_callcode,
+			is_call_or_staticcall,
+			new_account,
+			config,
+		)
 }
 
 pub const fn address_access_cost(

@@ -3,6 +3,7 @@ mod macros;
 mod eof;
 mod system;
 
+use crate::context::ExtCallScheme;
 use crate::prelude::*;
 use crate::{CallScheme, ExitReason, Handler, Opcode, Runtime};
 use core::cmp::min;
@@ -85,9 +86,11 @@ pub fn eval<H: Handler>(state: &mut Runtime, opcode: Opcode, handler: &mut H) ->
 		Opcode::EOFCREATE => system::eof_create(state, handler),
 		Opcode::RETURNCONTRACT => system::return_contract(state, handler),
 		Opcode::RETURNDATALOAD => eof::ext::return_data_load(state, handler),
-		Opcode::EXTCALL => eof::ext::ext_call(state, handler),
-		Opcode::EXTDELEGATECALL => eof::ext::ext_delegate_call(state, handler),
-		Opcode::EXTSTATICCALL => eof::ext::ext_static_call(state, handler),
+		Opcode::EXTCALL => eof::ext::ext_call(state, handler, ExtCallScheme::ExtCall),
+		Opcode::EXTDELEGATECALL => {
+			eof::ext::ext_call(state, handler, ExtCallScheme::ExtDelegateCall)
+		}
+		Opcode::EXTSTATICCALL => eof::ext::ext_call(state, handler, ExtCallScheme::ExtStaticCall),
 		_ => handle_other(state, opcode, handler),
 	}
 }

@@ -10,6 +10,7 @@
 //! [EIP-7069](https://eips.ethereum.org/EIPS/eip-7069)
 #![allow(clippy::module_name_repetitions)]
 
+use crate::context::ExtCallScheme;
 use crate::eval::{finish_call, Control};
 use crate::{Context, ExitError, Handler, Runtime, Transfer, Vec};
 use evm_core::Capture;
@@ -32,7 +33,11 @@ pub fn return_data_load<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> 
 	Control::Continue
 }
 
-pub fn ext_call<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
+pub fn ext_call<H: Handler>(
+	runtime: &mut Runtime,
+	handler: &mut H,
+	scheme: ExtCallScheme,
+) -> Control<H> {
 	require_eof!(runtime);
 	pop_h256!(runtime, to);
 	// Check if target is left padded with zeroes.
@@ -40,9 +45,17 @@ pub fn ext_call<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H
 		return Control::Exit(ExitError::InvalidEXTCALLTarget.into());
 	}
 	let to_address = H160::from_slice(&to.0[12..]);
+	// Clear return data buffer
 	runtime.return_data_buffer = Vec::new();
 
-	pop_u256!(runtime, value, in_offset, in_len);
+	let value = match scheme {
+		ExtCallScheme::ExtCall => {
+			pop_u256!(runtime, value);
+			value
+		}
+		ExtCallScheme::ExtDelegateCall | ExtCallScheme::ExtStaticCall => U256::zero(),
+	};
+	pop_u256!(runtime, in_offset, in_len);
 	// Cast to `usize` after length checking to avoid overflow
 	let in_offset = if in_len == U256::zero() {
 		usize::MAX
@@ -72,10 +85,25 @@ pub fn ext_call<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H
 		value,
 	});
 
-	// TODO: fix gas
-	let gas = None;
+	// Calculate the gas available to callee as caller’s
+	// remaining gas reduced by max(ceil(gas/64), MIN_RETAINED_GAS) (MIN_RETAINED_GAS is 5000).
+	let remain_gas = handler.gas_left().low_u64();
+	let gas_limit = remain_gas.saturating_sub(core::cmp::max(
+		remain_gas / 64,
+		crate::eof::MIN_RETAINED_GAS,
+	));
+	// The MIN_CALLEE_GAS rule is a replacement for stipend:
+	// it simplifies the reasoning about the gas costs and is
+	// applied uniformly for all introduced EXT*CALL instructions.
+	//
+	// If Gas available to callee is less than MIN_CALLEE_GAS trigger light failure (Same as Revert).
+	if gas_limit < crate::eof::MIN_CALLEE_GAS {
+		// Push 1 to stack to indicate that call light failed.
+		// It is safe to ignore stack overflow error as we already popped multiple values from stack.
+		push_u256!(runtime, U256::from(1));
+	}
 
-	match handler.call(to_address, transfer, input, gas, false, context) {
+	match handler.call(to_address, transfer, input, Some(gas_limit), false, context) {
 		Capture::Exit((reason, return_data)) => {
 			match finish_call(runtime, 0, 0, reason, return_data) {
 				Ok(()) => Control::Continue,
@@ -88,16 +116,4 @@ pub fn ext_call<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H
 			Control::CallInterrupt(interrupt)
 		}
 	}
-}
-
-pub fn ext_delegate_call<H: Handler>(runtime: &Runtime, _handler: &mut H) -> Control<H> {
-	require_eof!(runtime);
-
-	Control::Continue
-}
-
-pub fn ext_static_call<H: Handler>(runtime: &Runtime, _handler: &mut H) -> Control<H> {
-	require_eof!(runtime);
-
-	Control::Continue
 }
