@@ -1,6 +1,6 @@
 use crate::eof::Eof;
 use crate::eval::Control;
-use crate::{Handler, Runtime};
+use crate::{Handler, Runtime, Vec};
 use evm_core::ExitError;
 
 pub fn eof_create<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
