@@ -123,6 +123,36 @@ impl Machine {
 		Ok(data)
 	}
 
+	/// Increment the program counter with offset.
+	///
+	/// ## Errors
+	/// Returns `ExitReason` if the program counter is invalid.
+	pub fn inc_pc(&mut self, offset: usize) -> Result<(), ExitReason> {
+		let position = match &self.position {
+			Ok(pos) => *pos,
+			Err(e) => return Err(e.clone()),
+		};
+		self.position = Ok(position + offset);
+		Ok(())
+	}
+
+	/// Get the code with offset.
+	/// If code range is out of bound, return empty slice.
+	///
+	/// ## Errors
+	/// Returns `ExitReason` if the program counter is invalid.
+	pub fn get_code_with_offset(&mut self, offset: usize) -> Result<&[u8], ExitReason> {
+		let position = match &self.position {
+			Ok(pos) => *pos,
+			Err(e) => return Err(e.clone()),
+		};
+
+		Ok(self
+			.code
+			.get(position..position + offset)
+			.unwrap_or_default())
+	}
+
 	/// Create a new machine with given code and data.
 	#[must_use]
 	pub fn new(

@@ -584,21 +584,6 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 // EOF related functions
 
 #[allow(dead_code)]
-pub fn rjump<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
-pub fn rjumpi<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
-pub fn rjumpv<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
 pub fn callf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
 	todo!()
 }
