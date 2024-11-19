@@ -11,11 +11,7 @@ macro_rules! pop_h256 {
 	( $machine:expr, $( $x:ident ),* ) => (
 		$(
 			let $x = match $machine.machine.stack_mut().pop() {
-				Ok(value) => {
-					let mut res = H256([0; 32]);
-					value.to_big_endian(&mut res[..]);
-					res
-				},
+				Ok(value) => H256(value.to_big_endian()),
 				Err(e) => return Control::Exit(e.into()),
 			};
 		)*
@@ -71,4 +67,25 @@ macro_rules! as_usize_or_fail {
 
 		$v.as_usize()
 	}};
+}
+
+/// Converts a `U256` value to a `usize`, saturating to `MAX` if the value is too large.
+macro_rules! as_usize_saturated {
+	( $v:expr ) => {
+		if $v > crate::utils::USIZE_MAX {
+			usize::MAX
+		} else {
+			$v.as_usize()
+		}
+	};
+}
+
+macro_rules! require_eof {
+	($runtime:expr) => {
+		if let Some(ref eof) = $runtime.context.eof {
+			eof
+		} else {
+			return Control::Exit(ExitError::EOFOpcodeDisabledInLegacy.into());
+		}
+	};
 }

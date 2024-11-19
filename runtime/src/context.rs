@@ -1,3 +1,4 @@
+use crate::eof::Eof;
 use primitive_types::{H160, H256, U256};
 
 /// Create scheme.
@@ -34,6 +35,18 @@ pub enum CallScheme {
 	StaticCall,
 }
 
+/// Ext*Call scheme (EIP-7069).
+#[allow(clippy::enum_variant_names)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum ExtCallScheme {
+	/// `EXTCALL`
+	ExtCall,
+	/// `EXTDELEGATECALL`
+	ExtDelegateCall,
+	/// `EXTSTATICCALL`
+	ExtStaticCall,
+}
+
 /// Context of the runtime.
 #[derive(Clone, Debug)]
 pub struct Context {
@@ -41,6 +54,8 @@ pub struct Context {
 	pub address: H160,
 	/// Caller of the EVM.
 	pub caller: H160,
+	/// EOF data
+	pub eof: Option<Eof>,
 	/// Apparent value of the EVM.
 	pub apparent_value: U256,
 }

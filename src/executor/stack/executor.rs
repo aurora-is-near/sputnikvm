@@ -13,6 +13,7 @@ use crate::{
 use core::{cmp::min, convert::Infallible};
 use evm_core::utils::U64_MAX;
 use evm_core::{ExitFatal, InterpreterHandler, Machine, Trap};
+use evm_runtime::eof;
 use evm_runtime::Resolve;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
@@ -58,10 +59,67 @@ pub enum StackExitKind {
 	Failed,
 }
 
+/// `Authorization` contains already prepared data for EIP-7702.
+/// - `authority`is `ecrecovered` authority address.
+/// - `address` is delegation destination address.
+/// - `nonce` is the `nonce` value which `authority.nonce` should be equal.
+/// - `is_valid` is the flag that indicates the validity of the authorization. It is used to
+///   charge gas for each authorization item, but if it's invalid exclude from EVM `authority_list` flow.
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
+pub struct Authorization {
+	pub authority: H160,
+	pub address: H160,
+	pub nonce: u64,
+	pub is_valid: bool,
+}
+
+impl Authorization {
+	/// Create a new `Authorization` with given `authority`, `address`, and `nonce`.
+	#[must_use]
+	pub const fn new(authority: H160, address: H160, nonce: u64, is_valid: bool) -> Self {
+		Self {
+			authority,
+			address,
+			nonce,
+			is_valid,
+		}
+	}
+
+	/// Returns `true` if `authority` is delegated to `address`.
+	/// `0xef0100 ++ address`, and it is always 23 bytes.
+	#[must_use]
+	pub fn is_delegated(code: &[u8]) -> bool {
+		code.len() == 23 && code.starts_with(&[0xEF, 0x01, 0x00])
+	}
+
+	/// Get `authority` delegated `address`.
+	/// It checks, is it delegation designation (EIP-7702).
+	#[must_use]
+	pub fn get_delegated_address(code: &[u8]) -> Option<H160> {
+		if Self::is_delegated(code) {
+			// `code` size is always 23 bytes.
+			Some(H160::from_slice(&code[3..]))
+		} else {
+			None
+		}
+	}
+
+	/// Returns the delegation code as composing: `0xef0100 ++ address`.
+	/// Result code is always 23 bytes.
+	#[must_use]
+	pub fn delegation_code(&self) -> Vec<u8> {
+		let mut code = Vec::with_capacity(23);
+		code.extend(&[0xEF, 0x01, 0x00]);
+		code.extend(self.address.as_bytes());
+		code
+	}
+}
+
 #[derive(Default, Clone, Debug)]
 pub struct Accessed {
 	pub accessed_addresses: BTreeSet<H160>,
 	pub accessed_storage: BTreeSet<(H160, H256)>,
+	pub authority: BTreeMap<H160, H160>,
 }
 
 impl Accessed {
@@ -83,6 +141,23 @@ impl Accessed {
 		for storage in storages {
 			self.accessed_storage.insert((storage.0, storage.1));
 		}
+	}
+
+	/// Add authority to the accessed authority list (EIP-7702).
+	pub fn add_authority(&mut self, authority: H160, address: H160) {
+		self.authority.insert(authority, address);
+	}
+
+	/// Get authority from the accessed authority list (EIP-7702).
+	#[must_use]
+	pub fn get_authority_target(&self, authority: H160) -> Option<H160> {
+		self.authority.get(&authority).copied()
+	}
+
+	/// Check if authority is in the accessed authority list (EIP-7702).
+	#[must_use]
+	pub fn is_authority(&self, authority: H160) -> bool {
+		self.authority.contains_key(&authority)
 	}
 }
 
@@ -132,6 +207,9 @@ impl<'config> StackSubstateMetadata<'config> {
 			self_accessed
 				.accessed_storage
 				.append(&mut other_accessed.accessed_storage);
+			self_accessed
+				.authority
+				.append(&mut other_accessed.authority);
 		}
 
 		Ok(())
@@ -215,6 +293,13 @@ impl<'config> StackSubstateMetadata<'config> {
 	pub const fn accessed(&self) -> &Option<Accessed> {
 		&self.accessed
 	}
+
+	/// Add authority to accessed list (related to EIP-7702)
+	pub fn add_authority(&mut self, authority: H160, address: H160) {
+		if let Some(accessed) = &mut self.accessed {
+			accessed.add_authority(authority, address);
+		}
+	}
 }
 
 #[auto_impl::auto_impl(& mut, Box)]
@@ -253,22 +338,6 @@ pub trait StackState<'config>: Backend {
 	fn transfer(&mut self, transfer: Transfer) -> Result<(), ExitError>;
 	fn reset_balance(&mut self, address: H160);
 	fn touch(&mut self, address: H160);
-
-	/// Fetch the code size of an address.
-	/// Provide a default implementation by fetching the code, but
-	/// can be customized to use a more performant approach that don't need to
-	/// fetch the code.
-	fn code_size(&self, address: H160) -> U256 {
-		U256::from(self.code(address).len())
-	}
-
-	/// Fetch the code hash of an address.
-	/// Provide a default implementation by fetching the code, but
-	/// can be customized to use a more performant approach that don't need to
-	/// fetch the code.
-	fn code_hash(&self, address: H160) -> H256 {
-		H256::from_slice(Keccak256::digest(self.code(address)).as_slice())
-	}
 
 	/// # Errors
 	/// Return `ExitError`
@@ -320,6 +389,12 @@ pub trait StackState<'config>: Backend {
 	/// # Errors
 	/// Return `ExitError`
 	fn tload(&mut self, address: H160, index: H256) -> Result<U256, ExitError>;
+
+	/// EIP-7702 - check is authority cold.
+	fn is_authority_cold(&mut self, address: H160) -> Option<bool>;
+
+	/// EIP-7702 - get authority target address.
+	fn get_authority_target(&mut self, address: H160) -> Option<H160>;
 }
 
 /// Stack-based executor.
@@ -434,12 +509,25 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 						interrupt_runtime = Some(rt.0);
 						continue;
 					}
+					Capture::Trap(Resolve::EOFCreate(rt, _)) => {
+						interrupt_runtime = Some(rt.0);
+						continue;
+					}
 				}
 			};
+
 			let runtime_kind = runtime.kind;
 			let (reason, maybe_address, return_data) = match runtime_kind {
 				RuntimeKind::Create(created_address) => {
 					let (reason, maybe_address, return_data) = self.cleanup_for_create(
+						created_address,
+						reason,
+						runtime.inner.machine().return_value(),
+					);
+					(reason, maybe_address, return_data)
+				}
+				RuntimeKind::EOFCreate(created_address) => {
+					let (reason, maybe_address, return_data) = self.cleanup_for_eof_create(
 						created_address,
 						reason,
 						runtime.inner.machine().return_value(),
@@ -467,6 +555,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			let maybe_error = match runtime_kind {
 				RuntimeKind::Create(_) => {
 					inner_runtime.finish_create(reason, maybe_address, return_data)
+				}
+				RuntimeKind::EOFCreate(_) => {
+					inner_runtime.finish_eof_create(reason, maybe_address, return_data)
 				}
 				RuntimeKind::Call(_) | RuntimeKind::Execute => {
 					inner_runtime.finish_call(reason, return_data)
@@ -538,23 +629,34 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return emit_exit!(e.into(), Vec::new());
 		}
 
-		// Initialize initial addresses for EIP-2929
-		self.initialize_addresses(&[caller], access_list);
+		self.warm_addresses_and_storage(&[caller], access_list);
 
-		match self.create_inner(
-			caller,
-			CreateScheme::Legacy { caller },
-			value,
-			init_code,
-			Some(gas_limit),
-			false,
-		) {
-			Capture::Exit((s, v)) => emit_exit!(s, v),
-			Capture::Trap(rt) => {
-				let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
-					smallvec!(rt.0);
-				let (s, _, v) = self.execute_with_call_stack(&mut cs);
-				emit_exit!(s, v)
+		if self.config.has_eof && init_code.starts_with(eof::EOF_MAGIC) {
+			match self.create_eof_inner(caller, value, &init_code, Some(gas_limit), false) {
+				Capture::Exit((s, v)) => emit_exit!(s, v),
+				Capture::Trap(rt) => {
+					let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
+						smallvec!(rt.0);
+					let (s, _, v) = self.execute_with_call_stack(&mut cs);
+					emit_exit!(s, v)
+				}
+			}
+		} else {
+			match self.create_inner(
+				caller,
+				CreateScheme::Legacy { caller },
+				value,
+				init_code,
+				Some(gas_limit),
+				false,
+			) {
+				Capture::Exit((s, v)) => emit_exit!(s, v),
+				Capture::Trap(rt) => {
+					let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
+						smallvec!(rt.0);
+					let (s, _, v) = self.execute_with_call_stack(&mut cs);
+					emit_exit!(s, v)
+				}
 			}
 		}
 	}
@@ -582,8 +684,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return emit_exit!(e.into(), Vec::new());
 		}
 
-		// Initialize initial addresses for EIP-2929
-		self.initialize_addresses(&[caller], access_list);
+		self.warm_addresses_and_storage(&[caller], access_list);
 
 		match self.create_inner(
 			caller,
@@ -604,6 +705,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	}
 
 	/// Execute a `CREATE2` transaction.
+	#[allow(clippy::too_many_arguments)]
 	pub fn transact_create2(
 		&mut self,
 		caller: H160,
@@ -638,8 +740,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return emit_exit!(e.into(), Vec::new());
 		}
 
-		// Initialize initial addresses for EIP-2929
-		self.initialize_addresses(&[caller], access_list);
+		self.warm_addresses_and_storage(&[caller], access_list);
 
 		match self.create_inner(
 			caller,
@@ -663,12 +764,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 	}
 
-	/// Execute a `CALL` transaction with a given caller, address, value and
-	/// gas limit and data.
+	/// Execute a `CALL` transaction with a given parameters
 	///
-	/// Takes in an additional `access_list` parameter for EIP-2930 which was
-	/// introduced in the Ethereum Berlin hard fork. If you do not wish to use
-	/// this functionality, just pass in an empty vector.
+	/// ## Notes
+	/// - `access_list` associated to [EIP-2930: Optional access lists](https://eips.ethereum.org/EIPS/eip-2930)
+	/// - `authorization_list` associated to [EIP-7702: Authorized accounts](https://eips.ethereum.org/EIPS/eip-7702)
+	#[allow(clippy::too_many_arguments)]
 	pub fn transact_call(
 		&mut self,
 		caller: H160,
@@ -677,6 +778,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		data: Vec<u8>,
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>,
+		authorization_list: Vec<Authorization>,
 	) -> (ExitReason, Vec<u8>) {
 		event!(TransactCall {
 			caller,
@@ -690,17 +792,23 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return (ExitError::MaxNonce.into(), Vec::new());
 		}
 
-		let transaction_cost = gasometer::call_transaction_cost(&data, &access_list);
+		let transaction_cost =
+			gasometer::call_transaction_cost(&data, &access_list, authorization_list.len());
 		let gasometer = &mut self.state.metadata_mut().gasometer;
 		match gasometer.record_transaction(transaction_cost) {
 			Ok(()) => (),
 			Err(e) => return emit_exit!(e.into(), Vec::new()),
 		}
 
-		// Initialize initial addresses for EIP-2929
-		self.initialize_addresses(&[caller, address], access_list);
-
 		if let Err(e) = self.state.inc_nonce(caller) {
+			return (e.into(), Vec::new());
+		}
+
+		self.warm_addresses_and_storage(&[caller, address], access_list);
+
+		// EIP-7702. authorized accounts
+		// NOTE: it must be after `inc_nonce`
+		if let Err(e) = self.authorized_accounts(authorization_list) {
 			return (e.into(), Vec::new());
 		}
 
@@ -708,6 +816,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			caller,
 			address,
 			apparent_value: value,
+			eof: None,
 		};
 
 		match self.call_inner(
@@ -761,7 +870,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	/// Check if the existing account is "create collision".    
 	/// [EIP-7610](https://eips.ethereum.org/EIPS/eip-7610)
 	pub fn is_create_collision(&self, address: H160) -> bool {
-		self.code_size(address) != U256::zero()
+		!self.code(address).is_empty()
 			|| self.nonce(address) > U256::zero()
 			|| !self.state.is_empty_storage(address)
 	}
@@ -792,7 +901,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		}
 	}
 
-	pub fn initialize_with_access_list(&mut self, access_list: Vec<(H160, Vec<H256>)>) {
+	/// According to `EIP-2930` - `access_list` should be warmed.
+	/// This function warms addresses and storage keys.
+	///
+	/// [EIP-2930: Optional access lists](https://eips.ethereum.org/EIPS/eip-2930)
+	pub fn warm_access_list(&mut self, access_list: Vec<(H160, Vec<H256>)>) {
 		let addresses = access_list.iter().map(|a| a.0);
 		self.state.metadata_mut().access_addresses(addresses);
 
@@ -802,7 +915,22 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		self.state.metadata_mut().access_storages(storage_keys);
 	}
 
-	fn initialize_addresses(&mut self, addresses: &[H160], access_list: Vec<(H160, Vec<H256>)>) {
+	/// Warm addresses and storage keys.
+	/// - According to `EIP-2929` the addresses should be warmed:
+	///   1. caller (tx.sender)
+	///   2. address (tx.to or the address being created if it is a contract creation transaction)
+	/// - Warm coinbase according to `EIP-3651`
+	/// - Warm `access_list` according to `EIP-2931`
+	///
+	/// ## References
+	/// - [EIP-2929: Gas cost increases for state access opcodes](https://eips.ethereum.org/EIPS/eip-2929)
+	/// - [EIP-2930: Optional access lists](https://eips.ethereum.org/EIPS/eip-2930)
+	/// - [EIP-3651: Warm COINBASE](https://eips.ethereum.org/EIPS/eip-3651)
+	fn warm_addresses_and_storage(
+		&mut self,
+		addresses: &[H160],
+		access_list: Vec<(H160, Vec<H256>)>,
+	) {
 		if self.config.increase_state_access_gas {
 			if self.config.warm_coinbase_address {
 				// Warm coinbase address for EIP-3651
@@ -816,8 +944,80 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 					.access_addresses(addresses.iter().copied());
 			};
 
-			self.initialize_with_access_list(access_list);
+			self.warm_access_list(access_list);
 		}
+	}
+
+	/// Authorized accounts behavior.
+	///
+	/// According to `EIP-7702` behavior section should be several steps of verifications.
+	/// Current function includes steps 3-8 from the spec:
+	/// 3. Add `authority` to `accessed_addresses`
+	/// 4. Verify the code of `authority` is either empty or already delegated.
+	/// 5. Verify the `nonce` of `authority` is equal to `nonce` (of address).
+	/// 7. Set the code of `authority` to be `0xef0100 || address`. This is a delegation designation.
+	/// 8. Increase the `nonce` of `authority` by one.
+	///
+	/// It means, that steps 1-2 of spec must be passed before calling this function:
+	/// 1 Verify the chain id is either 0 or the chain’s current ID.
+	/// 2. `authority = ecrecover(...)`
+	///
+	/// See: [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702#behavior)
+	///
+	/// ## Errors
+	/// Return error if nonce increment return error.
+	fn authorized_accounts(
+		&mut self,
+		authorization_list: Vec<Authorization>,
+	) -> Result<(), ExitError> {
+		if !self.config.has_authorization_list {
+			return Ok(());
+		}
+		let mut refunded_accounts = 0;
+
+		let state = self.state_mut();
+		let mut warm_authority: Vec<H160> = Vec::with_capacity(authorization_list.len());
+		for authority in authorization_list {
+			// If EIP-7703 Spec validation steps 1 or 2 return false.
+			if !authority.is_valid {
+				continue;
+			}
+			// 3. Add authority to accessed_addresses (as defined in EIP-2929)
+			warm_authority.push(authority.authority);
+			// 4. Verify the code of authority is either empty or already delegated.
+			let authority_code = state.code(authority.authority);
+			if !authority_code.is_empty() && !Authorization::is_delegated(&authority_code) {
+				continue;
+			}
+
+			// 5. Verify the nonce of authority is equal to nonce.
+			if state.basic(authority.authority).nonce != U256::from(authority.nonce) {
+				continue;
+			}
+
+			// 6. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter if authority exists in the trie.
+			if !state.is_empty(authority.authority) {
+				refunded_accounts += 1;
+			}
+			// 7. Set the code of authority to be `0xef0100 || address`. This is a delegation designation.
+			state.set_code(authority.authority, authority.delegation_code());
+			// 8. Increase the nonce of authority by one.
+			state.inc_nonce(authority.authority)?;
+
+			// Add to authority access list cache
+			state
+				.metadata_mut()
+				.add_authority(authority.authority, authority.address);
+		}
+		// Warm addresses for [Step 3].
+		self.state
+			.metadata_mut()
+			.access_addresses(warm_authority.into_iter());
+
+		self.state
+			.metadata_mut()
+			.gasometer
+			.record_authority_refund(refunded_accounts)
 	}
 
 	/// Calculate gas limit and record it in the gasometer.
@@ -842,6 +1042,112 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let gas_limit = min(target_gas, after_gas);
 		self.state.metadata_mut().gasometer.record_cost(gas_limit)?;
 		Ok(gas_limit)
+	}
+
+	/// `EOFv1` create inner
+	fn create_eof_inner(
+		&mut self,
+		caller: H160,
+		value: U256,
+		init_code: &[u8],
+		target_gas: Option<u64>,
+		take_l64: bool,
+	) -> Capture<(ExitReason, Vec<u8>), StackExecutorEOFCreateInterrupt<'static>> {
+		if self.nonce(caller) >= U64_MAX {
+			return Capture::Exit((ExitError::MaxNonce.into(), Vec::new()));
+		}
+
+		// Decode EOF
+		let (eof, input) = match eof::Eof::decode_surplus(init_code) {
+			Ok(data) => data,
+			Err(e) => {
+				return Capture::Exit((ExitReason::Error(e.into()), Vec::new()));
+			}
+		};
+
+		// Warm address for EIP-2929
+		let address = self.create_address(CreateScheme::Legacy { caller });
+		self.state
+			.metadata_mut()
+			.access_addresses([caller, address].iter().copied());
+
+		event!(CreateEOF {
+			caller,
+			address,
+			value,
+			init_code,
+			target_gas
+		});
+
+		if let Some(depth) = self.state.metadata().depth {
+			// As Depth incremented in `enter_substate` we must check depth counter
+			// early to verify exceeding Stack limit. It allows avoid
+			// issue with wrong detection `CallTooDeep` for Create.
+			if depth + 1 > self.config.call_stack_limit {
+				return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
+			}
+		}
+
+		// Check is transfer value is enough
+		if self.balance(caller) < value {
+			return Capture::Exit((ExitError::OutOfFund.into(), Vec::new()));
+		}
+
+		let gas_limit = try_or_fail!(self.calc_gas_limit_and_record(target_gas, take_l64));
+
+		// Check nonce and increment it for caller
+		try_or_fail!(self.state.inc_nonce(caller));
+
+		// Check create collision: EIP-7610
+		if self.is_create_collision(address) {
+			return Capture::Exit((ExitError::CreateCollision.into(), Vec::new()));
+		}
+
+		// Enter to execution substate
+		self.enter_substate(gas_limit, false);
+
+		// Check nonce and increment it for created address after  entering substate
+		if self.config.create_increase_nonce {
+			try_or_fail!(self.state.inc_nonce(address));
+		}
+
+		// Transfer funds if needed
+		let transfer = Transfer {
+			source: caller,
+			target: address,
+			value,
+		};
+		match self.state.transfer(transfer) {
+			Ok(()) => (),
+			Err(e) => {
+				let _ = self.exit_substate(&StackExitKind::Reverted);
+				return Capture::Exit((ExitReason::Error(e), Vec::new()));
+			}
+		}
+		// It needed for CANCUN hard fork EIP-6780 we should mark account as created
+		// to handle SELFDESTRUCT in the same transaction
+		self.state.set_created(address);
+
+		// Init EVM runtime in Context
+		let context = Context {
+			address,
+			caller,
+			eof: Some(eof),
+			apparent_value: value,
+		};
+		let runtime = Runtime::new(
+			Rc::new(input),
+			Rc::new(Vec::new()),
+			context,
+			self.config.stack_limit,
+			self.config.memory_limit,
+		);
+
+		// Set Runtime kind with pre-init Runtime and return Trap, that mean continue execution
+		Capture::Trap(StackExecutorEOFCreateInterrupt(TaggedRuntime {
+			kind: RuntimeKind::EOFCreate(address),
+			inner: MaybeBorrowed::Owned(runtime),
+		}))
 	}
 
 	fn create_inner(
@@ -925,6 +1231,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let context = Context {
 			address,
 			caller,
+			eof: None,
 			apparent_value: value,
 		};
 		let runtime = Runtime::new(
@@ -971,7 +1278,13 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			}
 		}
 
-		let code = self.code(code_address);
+		// EIP-7702 - get delegated designation address code
+		// Detect loop for Delegated designation
+		let code = self.authority_code(code_address);
+		// Warm Delegated address after access
+		if let Some(target_address) = self.get_authority_target(code_address) {
+			self.warm_target((target_address, None));
+		}
 
 		self.enter_substate(gas_limit, is_static);
 		self.state.touch(context.address);
@@ -1045,6 +1358,17 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			kind: RuntimeKind::Call(code_address),
 			inner: MaybeBorrowed::Owned(runtime),
 		}))
+	}
+
+	// TODO: fix clippy
+	#[allow(clippy::needless_pass_by_value)]
+	fn cleanup_for_eof_create(
+		&self,
+		_created_address: H160,
+		_reason: ExitReason,
+		_return_data: Vec<u8>,
+	) -> (ExitReason, Option<H160>, Vec<u8>) {
+		todo!()
 	}
 
 	fn cleanup_for_create(
@@ -1198,7 +1522,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 				.record_cost(u64::from(cost))?;
 		} else {
 			let is_static = self.state.metadata().is_static;
-			let (gas_cost, target, memory_cost) = gasometer::dynamic_opcode_cost(
+			let (gas_cost, memory_cost) = gasometer::dynamic_opcode_cost(
 				*address,
 				opcode,
 				machine.stack(),
@@ -1211,15 +1535,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 				.metadata_mut()
 				.gasometer
 				.record_dynamic_cost(gas_cost, memory_cost)?;
-			match target {
-				StorageTarget::Address(address) => {
-					self.state.metadata_mut().access_address(address);
-				}
-				StorageTarget::Slot(address, key) => {
-					self.state.metadata_mut().access_storage(address, key);
-				}
-				StorageTarget::None => (),
-			}
 		}
 		Ok(())
 	}
@@ -1248,10 +1563,13 @@ pub struct StackExecutorCallInterrupt<'borrow>(TaggedRuntime<'borrow>);
 
 pub struct StackExecutorCreateInterrupt<'borrow>(TaggedRuntime<'borrow>);
 
+pub struct StackExecutorEOFCreateInterrupt<'borrow>(TaggedRuntime<'borrow>);
+
 impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	for StackExecutor<'config, 'precompiles, S, P>
 {
 	type CreateInterrupt = StackExecutorCreateInterrupt<'static>;
+	type EOFCreateInterrupt = StackExecutorEOFCreateInterrupt<'static>;
 	type CreateFeedback = Infallible;
 	type CallInterrupt = StackExecutorCallInterrupt<'static>;
 	type CallFeedback = Infallible;
@@ -1262,18 +1580,32 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		self.state.basic(address).balance
 	}
 
-	/// Get account code size
-	fn code_size(&self, address: H160) -> U256 {
-		self.state.code_size(address)
+	/// Fetch the code size of an address.
+	/// Provide a default implementation by fetching the code.
+	///
+	/// According to EIP-7702, the code size of an address is the size of the
+	/// delegated address code size.
+	fn code_size(&mut self, address: H160) -> U256 {
+		let target_code = self.authority_code(address);
+		U256::from(target_code.len())
 	}
 
-	/// Get account code hash
-	fn code_hash(&self, address: H160) -> H256 {
+	/// Fetch the code hash of an address.
+	/// Provide a default implementation by fetching the code.
+	///
+	/// According to EIP-7702, the code hash of an address is the hash of the
+	/// delegated address code hash.
+	fn code_hash(&mut self, address: H160) -> H256 {
 		if !self.exists(address) {
 			return H256::default();
 		}
-
-		self.state.code_hash(address)
+		if let Some(target) = self.get_authority_target(address) {
+			if !self.exists(target) {
+				return H256::default();
+			}
+		}
+		let code = self.authority_code(address);
+		H256::from_slice(Keccak256::digest(code).as_slice())
 	}
 
 	/// Get account code
@@ -1532,6 +1864,45 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 			Err(ExitError::InvalidCode(Opcode::TLOAD))
 		}
 	}
+
+	/// Return the target address of the authority delegation designation (EIP-7702).
+	fn get_authority_target(&mut self, address: H160) -> Option<H160> {
+		if self.config.has_authorization_list {
+			self.state.get_authority_target(address)
+		} else {
+			None
+		}
+	}
+
+	/// Get delegation designator code for the authority code.
+	/// If the code of address is delegation designator, then retrieve code
+	/// from the designation address for the `authority`.
+	/// Detect delegated designation loop and return basic byte code for loop.
+	///
+	/// It's related to [EIP-7702 Delegation Designation](https://eips.ethereum.org/EIPS/eip-7702#delegation-designation)
+	/// When authority code is found, it should set delegated address to `authority_access` array for
+	/// calculating additional gas cost. Gas must be charged for the authority address and
+	/// for delegated address, for detection is address warm or cold.
+	fn authority_code(&mut self, authority: H160) -> Vec<u8> {
+		if !self.config.has_authorization_list {
+			return self.code(authority);
+		}
+		// Check if it is a loop for Delegated designation
+		self.get_authority_target(authority).map_or_else(
+			|| self.code(authority),
+			|target_address| self.code(target_address),
+		)
+	}
+
+	// Warm target according to EIP-2929
+	// It warm up the target address or storage value by key. If in the target tuple
+	// the storage is `None` then it's warming up the address.
+	fn warm_target(&mut self, target: (H160, Option<H256>)) {
+		match target {
+			(address, None) => self.state.metadata_mut().access_address(address),
+			(address, Some(key)) => self.state.metadata_mut().access_storage(address, key),
+		}
+	}
 }
 
 struct StackExecutorHandle<'inner, 'config, 'precompiles, S, P> {
@@ -1561,10 +1932,17 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 		// Since we don't go through opcodes we need manually record the call
 		// cost. Not doing so will make the code panic as recording the call stipend
 		// will do an underflow.
+		let target_is_cold = self.executor.is_cold(code_address, None);
+		let delegated_designator_is_cold = self
+			.executor
+			.get_authority_target(code_address)
+			.map(|target| self.executor.is_cold(target, None));
+
 		let gas_cost = gasometer::GasCost::Call {
 			value: transfer.clone().map_or_else(U256::zero, |x| x.value),
 			gas: U256::from(gas_limit.unwrap_or(u64::MAX)),
-			target_is_cold: self.executor.is_cold(code_address, None),
+			target_is_cold,
+			delegated_designator_is_cold,
 			target_exists: self.executor.exists(code_address),
 		};
 
@@ -1647,7 +2025,7 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 			.refund_external_cost(ref_time, proof_size);
 	}
 
-	/// Retreive the remaining gas.
+	/// Retrieve the remaining gas.
 	fn remaining_gas(&self) -> u64 {
 		self.executor.state.metadata().gasometer.gas()
 	}
@@ -1657,17 +2035,17 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 		Handler::log(self.executor, address, topics, data)
 	}
 
-	/// Retreive the code address (what is the address of the precompile being called).
+	/// Retrieve the code address (what is the address of the precompile being called).
 	fn code_address(&self) -> H160 {
 		self.code_address
 	}
 
-	/// Retreive the input data the precompile is called with.
+	/// Retrieve the input data the precompile is called with.
 	fn input(&self) -> &[u8] {
 		self.input
 	}
 
-	/// Retreive the context in which the precompile is executed.
+	/// Retrieve the context in which the precompile is executed.
 	fn context(&self) -> &Context {
 		self.context
 	}
@@ -1677,7 +2055,7 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 		self.is_static
 	}
 
-	/// Retreive the gas limit of this call.
+	/// Retrieve the gas limit of this call.
 	fn gas_limit(&self) -> Option<u64> {
 		self.gas_limit
 	}

@@ -17,6 +17,7 @@
 //! JSON deserialization library
 
 #![warn(missing_docs)]
+#![allow(clippy::too_long_first_doc_paragraph)]
 
 pub mod bytes;
 pub mod hash;

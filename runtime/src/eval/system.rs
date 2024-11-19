@@ -73,16 +73,14 @@ pub fn caller<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 }
 
 pub fn callvalue<H: Handler>(runtime: &mut Runtime) -> Control<H> {
-	let mut ret = H256::default();
-	runtime.context.apparent_value.to_big_endian(&mut ret[..]);
+	let ret = H256(runtime.context.apparent_value.to_big_endian());
 	push_h256!(runtime, ret);
 
 	Control::Continue
 }
 
 pub fn gasprice<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
-	let mut ret = H256::default();
-	handler.gas_price().to_big_endian(&mut ret[..]);
+	let ret = H256(handler.gas_price().to_big_endian());
 	push_h256!(runtime, ret);
 
 	Control::Continue
@@ -128,21 +126,21 @@ pub fn blob_hash<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
 	Control::Continue
 }
 
-pub fn extcodesize<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
+pub fn extcodesize<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
 	pop_h256!(runtime, address);
 	push_u256!(runtime, handler.code_size(address.into()));
 
 	Control::Continue
 }
 
-pub fn extcodehash<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
+pub fn extcodehash<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
 	pop_h256!(runtime, address);
 	push_h256!(runtime, handler.code_hash(address.into()));
 
 	Control::Continue
 }
 
-pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H> {
+pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
 	pop_h256!(runtime, address);
 	pop_u256!(runtime, memory_offset, code_offset, len);
 
@@ -162,7 +160,7 @@ pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &H) -> Control<H>
 		memory_offset,
 		code_offset,
 		len,
-		&handler.code(address.into()),
+		&handler.authority_code(address.into()),
 	) {
 		Ok(()) => (),
 		Err(e) => return Control::Exit(e.into()),
@@ -201,13 +199,21 @@ pub fn returndatacopy<H: Handler>(runtime: &mut Runtime) -> Control<H> {
 		.machine
 		.memory_mut()
 		.resize_offset(memory_offset, len));
-	if data_offset
-		.checked_add(len.into())
-		.map_or(true, |l| l > U256::from(runtime.return_data_buffer.len()))
-	{
+
+	// Old legacy behavior is to panic if data_end is out of scope of return buffer.
+	// This behavior is changed in EOF.
+	// EIP-7069: modifies behavior of RETURNDATACOPY to not halt if data_end is out of scope of return buffer.
+	let is_eof = runtime.context.eof.is_some();
+	if data_offset.checked_add(len.into()).map_or(true, |l| {
+		!is_eof && l > U256::from(runtime.return_data_buffer.len())
+	}) {
 		return Control::Exit(ExitError::OutOfOffset.into());
 	}
 
+	// According to EIP-7069: `data_offset + len > len(returndata buffer)`
+	// if it is not then set the remaining `offset + size - len(returndata buffer)`
+	// memory bytes after the copied ones to zero.
+	// NOTE: `copy_large` will fill with zeros automatically if data out of bounds.
 	match runtime.machine.memory_mut().copy_large(
 		memory_offset,
 		data_offset,
@@ -294,11 +300,7 @@ pub fn sstore<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> 
 pub fn tload<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Control<H> {
 	// Peek index from the top of the stack
 	let index = match runtime.machine.stack().peek(0) {
-		Ok(value) => {
-			let mut h = H256::default();
-			value.to_big_endian(&mut h[..]);
-			h
-		}
+		Ok(value) => H256(value.to_big_endian()),
 		Err(e) => return Control::Exit(e.into()),
 	};
 	// Load value from transient storage
@@ -523,16 +525,19 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 		CallScheme::Call | CallScheme::StaticCall => Context {
 			address: to.into(),
 			caller: runtime.context.address,
+			eof: runtime.context.eof.clone(),
 			apparent_value: value,
 		},
 		CallScheme::CallCode => Context {
 			address: runtime.context.address,
 			caller: runtime.context.address,
+			eof: runtime.context.eof.clone(),
 			apparent_value: value,
 		},
 		CallScheme::DelegateCall => Context {
 			address: runtime.context.address,
 			caller: runtime.context.caller,
+			eof: runtime.context.eof.clone(),
 			apparent_value: runtime.context.apparent_value,
 		},
 	};
@@ -573,4 +578,27 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 			Control::CallInterrupt(interrupt)
 		}
 	}
+}
+
+//===========================
+// EOF related functions
+
+#[allow(dead_code)]
+pub fn callf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn retf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn jumpf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
+}
+
+#[allow(dead_code)]
+pub fn return_contract<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	todo!()
 }
