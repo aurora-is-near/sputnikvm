@@ -1,9 +1,12 @@
+//! # EIP-4200: EOF - Static relative jumps
+//!
+//! RJUMP, RJUMPI and RJUMPV instructions with a signed immediate encoding the jump destination
+//! [EIP-4200](https://eips.ethereum.org/EIPS/eip-4200)
 use crate::eof;
 use crate::eval::Control;
 use crate::{Handler, Runtime};
 use evm_core::ExitError;
 
-#[allow(dead_code)]
 pub fn rjump<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
 	require_eof!(runtime);
 	// In spec it is +3 but pointer is already incremented in
@@ -17,7 +20,6 @@ pub fn rjump<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H> 
 	Control::Continue
 }
 
-#[allow(dead_code)]
 pub fn rjumpi<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
 	require_eof!(runtime);
 	pop_u256!(runtime, condition);
@@ -34,7 +36,6 @@ pub fn rjumpi<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H>
 	Control::Continue
 }
 
-#[allow(dead_code)]
 pub fn rjumpv<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
 	require_eof!(runtime);
 	pop_u256!(runtime, case);

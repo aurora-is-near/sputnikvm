@@ -881,6 +881,15 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		Opcode::RETURNDATALOAD if config.has_eof => GasCost::VeryLow,
 		Opcode::RETURNDATALOAD => GasCost::Invalid(opcode),
 
+		Opcode::RJUMP if config.has_eof => GasCost::Base,
+		Opcode::RJUMP => GasCost::Invalid(opcode),
+
+		Opcode::RJUMPI if config.has_eof => GasCost::ConditionJump,
+		Opcode::RJUMPI => GasCost::Invalid(opcode),
+
+		Opcode::RJUMPV if config.has_eof => GasCost::ConditionJump,
+		Opcode::RJUMPV => GasCost::Invalid(opcode),
+
 		_ => GasCost::Invalid(opcode),
 	};
 
@@ -1104,7 +1113,8 @@ impl<'config> Inner<'config> {
 			GasCost::Low => u64::from(consts::G_LOW),
 			GasCost::Invalid(opcode) => return Err(ExitError::InvalidCode(opcode)),
 
-			GasCost::DataLoad => u64::from(consts::G_DATA_LOAD),
+			GasCost::DataLoad => consts::G_DATA_LOAD,
+			GasCost::ConditionJump => consts::G_CONDITION_JUMP,
 
 			GasCost::ExtCodeSize {
 				target_is_cold,
@@ -1327,6 +1337,8 @@ pub enum GasCost {
 	WarmStorageRead,
 	/// Gas for EOF `DATALOAD`
 	DataLoad,
+	/// EOF RJUMPI
+	ConditionJump,
 }
 
 /// Storage opcode will access. Used for tracking accessed storage (EIP-2929).
