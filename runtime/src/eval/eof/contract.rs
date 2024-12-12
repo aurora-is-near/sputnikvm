@@ -15,7 +15,6 @@ pub fn eof_create<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Contro
 		.body
 		.container_section
 		.get(initcontainer_index)
-		.copied()
 		.expect("EOF is validated");
 	// Cast to `usize` after length checking to avoid overflow
 	let data_offset = if data_offset.is_zero() {

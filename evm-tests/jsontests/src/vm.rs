@@ -1,5 +1,6 @@
 use crate::state::{TestExecutionResult, VerboseOutput};
 use evm::backend::{ApplyBackend, MemoryAccount, MemoryBackend, MemoryVicinity};
+use evm::eof::FunctionStack;
 use evm::executor::stack::{MemoryStackState, StackExecutor, StackSubstateMetadata};
 use evm::Config;
 use primitive_types::{H160, H256, U256};
@@ -57,8 +58,9 @@ impl Test {
 		evm::Context {
 			address: self.0.transaction.address.into(),
 			caller: self.0.transaction.sender.into(),
-			eof: None,
 			apparent_value: self.0.transaction.value.into(),
+			eof: None,
+			eof_function_stack: FunctionStack::default(),
 		}
 	}
 

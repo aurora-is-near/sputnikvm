@@ -5,7 +5,7 @@
 	clippy::module_name_repetitions
 )]
 
-use crate::eof::{Eof, EofHeader};
+use crate::eof::{Eof, EofHeader, FunctionStack};
 use crate::{Context, CreateScheme, Handler, Runtime, Transfer};
 use evm_core::{Capture, ExitError, ExitReason, ExternalOperation};
 use primitive_types::{H160, H256, U256};
@@ -216,6 +216,7 @@ pub fn init_runtime(code: Vec<u8>, eof: Option<Eof>) -> Runtime {
 			caller: H160::zero(),
 			eof,
 			apparent_value: U256::zero(),
+			eof_function_stack: FunctionStack::default(),
 		},
 		1024,
 		32 * 1024,

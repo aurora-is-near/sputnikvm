@@ -77,14 +77,16 @@ pub fn ext_call<H: Handler>(
 		ExtCallScheme::ExtCall | ExtCallScheme::ExtStaticCall => Context {
 			address: to_address,
 			caller: runtime.context.address,
-			eof: runtime.context.eof.clone(),
 			apparent_value: value,
+			eof: runtime.context.eof.clone(),
+			eof_function_stack: runtime.context.eof_function_stack.clone(),
 		},
 		ExtCallScheme::ExtDelegateCall => Context {
 			address: runtime.context.address,
 			caller: runtime.context.caller,
-			eof: runtime.context.eof.clone(),
 			apparent_value: runtime.context.apparent_value,
+			eof: runtime.context.eof.clone(),
+			eof_function_stack: runtime.context.eof_function_stack.clone(),
 		},
 	};
 	let transfer = if scheme == ExtCallScheme::ExtCall {

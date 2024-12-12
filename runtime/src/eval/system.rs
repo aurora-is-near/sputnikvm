@@ -525,20 +525,23 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 		CallScheme::Call | CallScheme::StaticCall => Context {
 			address: to.into(),
 			caller: runtime.context.address,
-			eof: runtime.context.eof.clone(),
 			apparent_value: value,
+			eof: runtime.context.eof.clone(),
+			eof_function_stack: runtime.context.eof_function_stack.clone(),
 		},
 		CallScheme::CallCode => Context {
 			address: runtime.context.address,
 			caller: runtime.context.address,
-			eof: runtime.context.eof.clone(),
 			apparent_value: value,
+			eof: runtime.context.eof.clone(),
+			eof_function_stack: runtime.context.eof_function_stack.clone(),
 		},
 		CallScheme::DelegateCall => Context {
 			address: runtime.context.address,
 			caller: runtime.context.caller,
-			eof: runtime.context.eof.clone(),
 			apparent_value: runtime.context.apparent_value,
+			eof: runtime.context.eof.clone(),
+			eof_function_stack: runtime.context.eof_function_stack.clone(),
 		},
 	};
 
@@ -582,11 +585,6 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 
 //===========================
 // EOF related functions
-
-#[allow(dead_code)]
-pub fn callf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
 
 #[allow(dead_code)]
 pub fn retf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {

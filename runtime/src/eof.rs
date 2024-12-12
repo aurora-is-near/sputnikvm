@@ -29,6 +29,60 @@ pub const fn get_u16(input: &[u8], index: usize) -> u16 {
 	u16::from_be_bytes([input[index], input[index + 1]])
 }
 
+/// Function return state. Needed information for returning from a function.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FunctionReturnState {
+	/// The index of the code container that this state is executing.
+	pub index: usize,
+	/// The program counter where state execution should continue.
+	pub pc: usize,
+}
+
+/// Function Stack
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FunctionStack {
+	pub return_stack: Vec<FunctionReturnState>,
+	pub current_code_index: usize,
+}
+
+impl FunctionStack {
+	/// Returns new function stack.
+	#[must_use]
+	pub const fn new() -> Self {
+		Self {
+			return_stack: Vec::new(),
+			current_code_index: 0,
+		}
+	}
+
+	/// Pushes a new state to the stack. and sets `current_code_index` to new value.
+	pub fn push(&mut self, program_counter: usize, new_index: usize) {
+		self.return_stack.push(FunctionReturnState {
+			index: self.current_code_index,
+			pc: program_counter,
+		});
+		self.current_code_index = new_index;
+	}
+
+	/// Return stack length
+	#[must_use]
+	pub fn return_stack_len(&self) -> usize {
+		self.return_stack.len()
+	}
+
+	/// Pops a state from the stack and sets `current_code_index` to the popped frame's index.
+	pub fn pop(&mut self) -> Option<FunctionReturnState> {
+		self.return_stack
+			.pop()
+			.inspect(|state| self.current_code_index = state.index)
+	}
+
+	/// Sets index, this is needed for `JUMPF` opcode.
+	pub fn set_current_code_index(&mut self, index: usize) {
+		self.current_code_index = index;
+	}
+}
+
 /// EVM Object Format (EOF) container.
 ///
 /// It consists of a header, body.
@@ -75,6 +129,12 @@ impl Eof {
 			.get(offset..)
 			.and_then(|bytes| bytes.get(..core::cmp::min(len, bytes.len())))
 			.unwrap_or_default()
+	}
+
+	/// Check is `input` EOF code
+	#[must_use]
+	pub fn is_eof(input: &[u8]) -> bool {
+		input.starts_with(EOF_MAGIC)
 	}
 }
 
@@ -276,8 +336,8 @@ impl EofHeader {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EofBody {
 	pub types_section: Vec<TypesSection>,
-	pub code_section: Vec<u8>,
-	pub container_section: Vec<u8>,
+	pub code_section: Vec<Vec<u8>>,
+	pub container_section: Vec<Vec<u8>>,
 	pub data_section: Vec<u8>,
 	pub is_data_filled: bool,
 }
@@ -312,10 +372,10 @@ impl EofBody {
 			types_section.push(types_section_data);
 		}
 
-		// Extract code section form input
+		// Extract code section from input
 		let mut code_section = Vec::new();
 		for size in header.code_sizes.iter().map(|x| usize::from(*x)) {
-			code_section.extend(&input[index..index + size]);
+			code_section.push(input[index..index + size].to_vec());
 			// Next not accessed index after `size` bytes
 			index += size;
 		}
@@ -323,7 +383,7 @@ impl EofBody {
 		// Extract container section
 		let mut container_section = Vec::new();
 		for size in header.container_sizes.iter().map(|x| usize::from(*x)) {
-			container_section.extend(&input[index..index + size]);
+			container_section.push(input[index..index + size].to_vec());
 			// Next not accessed index after `size` bytes
 			index += size;
 		}
@@ -338,35 +398,6 @@ impl EofBody {
 			data_section,
 			is_data_filled,
 		})
-	}
-
-	/// Decode types section from input.
-	#[allow(dead_code)]
-	fn decode_types_section(_input: &[u8]) -> Result<Vec<TypesSection>, EofDecodeError> {
-		todo!()
-		/*
-		let mut types_section = Vec::new();
-		let mut index = 0;
-		while index < input.len() {
-			// inputs - 1 byte - `0x00-0x7F`: number of stack elements the code section consumes
-			let inputs = input[index];
-			index += 1;
-			// outputs - 1 byte - `0x00-0x80`: number of stack elements the code section returns
-			// or `0x80` for non-returning functions
-			let outputs = input[index];
-			index += 1;
-			// `max_stack_height` - 2 bytes - `0x0000-0x03FF`: maximum number of elements ever
-			// placed onto the stack by the code section
-			let max_stack_size = get_u16(input, index);
-			index += 2;
-			types_section.push(TypesSection {
-				inputs,
-				outputs,
-				max_stack_size,
-			});
-		}
-		Ok(types_section)
-		*/
 	}
 }
 
@@ -819,8 +850,16 @@ mod tests {
 				}
 			]
 		);
-		assert_eq!(body.code_section, vec![0xA9, 0xE0, 0xCF, 0x39, 0x8A, 0x3B]);
-		assert_eq!(body.container_section, vec![0xB8, 0xE7, 0xB3, 0x7C]);
+		assert_eq!(body.code_section.first().unwrap(), &vec![0xA9, 0xE0]);
+		assert_eq!(
+			body.code_section.get(1).unwrap(),
+			&vec![0xCF, 0x39, 0x8A, 0x3B]
+		);
+		assert_eq!(body.container_section.first().unwrap(), &vec![0xB8]);
+		assert_eq!(
+			body.container_section.get(1).unwrap(),
+			&vec![0xE7, 0xB3, 0x7C]
+		);
 		assert_eq!(body.data_section, vec![0x3B, 0x5F, 0xE3]);
 		assert!(body.is_data_filled);
 	}

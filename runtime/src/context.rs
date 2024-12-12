@@ -1,4 +1,4 @@
-use crate::eof::Eof;
+use crate::eof::{Eof, FunctionStack};
 use primitive_types::{H160, H256, U256};
 
 /// Create scheme.
@@ -54,8 +54,10 @@ pub struct Context {
 	pub address: H160,
 	/// Caller of the EVM.
 	pub caller: H160,
-	/// EOF data
-	pub eof: Option<Eof>,
 	/// Apparent value of the EVM.
 	pub apparent_value: U256,
+	/// EOF data
+	pub eof: Option<Eof>,
+	/// EOF function stack.
+	pub eof_function_stack: FunctionStack,
 }

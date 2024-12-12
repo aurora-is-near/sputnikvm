@@ -1,3 +1,4 @@
+pub mod call;
 pub mod contract;
 pub mod control;
 pub mod data;

@@ -153,6 +153,16 @@ impl Machine {
 			.unwrap_or_default())
 	}
 
+	/// Set the program code. Usefuk for EOF.
+	pub fn set_code(&mut self, code: &[u8]) {
+		self.code = Rc::new(code.to_vec());
+	}
+
+	/// Set program counter. Useful for EOF.
+	pub fn set_pc(&mut self, position: usize) {
+		self.position = Ok(position);
+	}
+
 	/// Create a new machine with given code and data.
 	#[must_use]
 	pub fn new(

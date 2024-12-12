@@ -14,6 +14,7 @@ use core::{cmp::min, convert::Infallible};
 use evm_core::utils::U64_MAX;
 use evm_core::{ExitFatal, InterpreterHandler, Machine, Trap};
 use evm_runtime::eof;
+use evm_runtime::eof::FunctionStack;
 use evm_runtime::Resolve;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
@@ -817,6 +818,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			address,
 			apparent_value: value,
 			eof: None,
+			eof_function_stack: FunctionStack::default(),
 		};
 
 		match self.call_inner(
@@ -1132,8 +1134,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let context = Context {
 			address,
 			caller,
-			eof: Some(eof),
 			apparent_value: value,
+			eof: Some(eof),
+			eof_function_stack: FunctionStack::default(),
 		};
 		let runtime = Runtime::new(
 			Rc::new(input),
@@ -1231,8 +1234,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let context = Context {
 			address,
 			caller,
-			eof: None,
 			apparent_value: value,
+			eof: None,
+			eof_function_stack: FunctionStack::default(),
 		};
 		let runtime = Runtime::new(
 			Rc::new(init_code),
@@ -1285,6 +1289,27 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		if let Some(target_address) = self.get_authority_target(code_address) {
 			self.warm_target((target_address, None));
 		}
+
+		// Check EOF and get Code from `code_section` and change Context
+		let (code, context) = if eof::Eof::is_eof(&code) {
+			let mut context = context;
+			match eof::Eof::decode(&code) {
+				Ok(eof) => {
+					// Set EOF
+					context.eof = Some(eof.clone());
+					(
+						// Get first code section
+						eof.body.code_section.first().cloned().unwrap_or_default(),
+						context,
+					)
+				}
+				Err(err) => {
+					return Capture::Exit((ExitReason::Error(err.into()), Vec::new()));
+				}
+			}
+		} else {
+			(code, context)
+		};
 
 		self.enter_substate(gas_limit, is_static);
 		self.state.touch(context.address);
