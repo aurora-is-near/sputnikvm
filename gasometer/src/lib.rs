@@ -893,6 +893,9 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		Opcode::CALLF if config.has_eof => GasCost::Low,
 		Opcode::CALLF => GasCost::Invalid(opcode),
 
+		Opcode::RETF if config.has_eof => GasCost::VeryLow,
+		Opcode::RETF => GasCost::Invalid(opcode),
+
 		_ => GasCost::Invalid(opcode),
 	};
 

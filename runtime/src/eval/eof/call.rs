@@ -46,3 +46,20 @@ pub fn callf<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H> 
 
 	Control::Continue
 }
+
+pub fn retf<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
+	let eof = require_eof!(runtime);
+	let Some(function_return_state) = runtime.context.eof_function_stack.pop() else {
+		return Control::Exit(ExitFatal::CallErrorAsFatal(ExitError::EOFUnexpectedCall).into());
+	};
+
+	let Some(code_section) = eof.body.code_section.get(function_return_state.index) else {
+		return Control::Exit(ExitFatal::CallErrorAsFatal(ExitError::EOFUnexpectedCall).into());
+	};
+	// Set machine code to target code section
+	runtime.machine.set_code(code_section);
+	// Set PC to position 0
+	runtime.machine.set_pc(function_return_state.pc);
+
+	Control::Continue
+}
