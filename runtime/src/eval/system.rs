@@ -587,11 +587,6 @@ pub fn call<H: Handler>(runtime: &mut Runtime, scheme: CallScheme, handler: &mut
 // EOF related functions
 
 #[allow(dead_code)]
-pub fn jumpf<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
-	todo!()
-}
-
-#[allow(dead_code)]
 pub fn return_contract<H: Handler>(_runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
 	todo!()
 }

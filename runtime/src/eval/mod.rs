@@ -79,7 +79,7 @@ pub fn eval<H: Handler>(state: &mut Runtime, opcode: Opcode, handler: &mut H) ->
 		Opcode::RJUMPV => eof::control::rjumpv(state, handler),
 		Opcode::CALLF => eof::call::callf(state, handler),
 		Opcode::RETF => eof::call::retf(state, handler),
-		Opcode::JUMPF => system::jumpf(state, handler),
+		Opcode::JUMPF => eof::jump::jumpf(state, handler),
 		Opcode::DUPN => eof::stack::dupn(state),
 		Opcode::SWAPN => eof::stack::swapn(state),
 		Opcode::EXCHANGE => eof::stack::exchange(state),

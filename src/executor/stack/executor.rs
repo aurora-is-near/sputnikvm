@@ -1299,10 +1299,16 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				Ok(eof) => {
 					// Set EOF
 					context.eof = Some(eof.clone());
+					// If code section doesn't exist, return `EOFUnexpectedCall`
+					let Some(code) = eof.body.code_section.first().cloned() else {
+						return Capture::Exit((
+							ExitFatal::CallErrorAsFatal(ExitError::EOFUnexpectedCall).into(),
+							Vec::new(),
+						));
+					};
 					(
 						// Get first code section
-						eof.body.code_section.first().cloned().unwrap_or_default(),
-						context,
+						code, context,
 					)
 				}
 				Err(err) => {

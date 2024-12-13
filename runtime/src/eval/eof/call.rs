@@ -58,7 +58,7 @@ pub fn retf<H: Handler>(runtime: &mut Runtime, _handler: &mut H) -> Control<H> {
 	};
 	// Set machine code to target code section
 	runtime.machine.set_code(code_section);
-	// Set PC to position 0
+	// Set PC to position
 	runtime.machine.set_pc(function_return_state.pc);
 
 	Control::Continue
