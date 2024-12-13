@@ -673,7 +673,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			Some(gas_limit),
 			false,
 		) {
-			Capture::Exit((s, _, v)) => emit_exit!(s, v),
+			Capture::Exit((s, v)) => emit_exit!(s, v),
 			Capture::Trap(rt) => {
 				let mut cs: SmallVec<[TaggedRuntime<'_>; DEFAULT_CALL_STACK_CAPACITY]> =
 					smallvec!(rt.0);
@@ -1369,7 +1369,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 					position: &Ok(_pc),
 					stack: machine.stack(),
 					memory: machine.memory(),
-				})
+				});
 			});
 		}
 

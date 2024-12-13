@@ -9,7 +9,8 @@ pub trait EventListener {
 }
 
 impl Snapshot {
-	pub fn gas(&self) -> u64 {
+	#[must_use]
+	pub const fn gas(&self) -> u64 {
 		self.gas_limit - self.used_gas - self.memory_gas
 	}
 }
