@@ -170,6 +170,17 @@ pub enum ExitError {
 	UsizeOverflow,
 	#[cfg_attr(feature = "with-codec", codec(index = 16))]
 	CreateContractStartingWithEF,
+
+	#[cfg_attr(feature = "with-codec", codec(index = 17))]
+	EOFDecodeError(EofDecodeError),
+	#[cfg_attr(feature = "with-codec", codec(index = 18))]
+	EOFOpcodeDisabledInLegacy,
+	#[cfg_attr(feature = "with-codec", codec(index = 19))]
+	InvalidEXTCALLTarget,
+	#[cfg_attr(feature = "with-codec", codec(index = 20))]
+	EOFUnexpectedCall,
+	#[cfg_attr(feature = "with-codec", codec(index = 21))]
+	EOFFunctionStackOverflow,
 }
 
 impl From<ExitError> for ExitReason {
@@ -200,5 +211,67 @@ pub enum ExitFatal {
 impl From<ExitFatal> for ExitReason {
 	fn from(s: ExitFatal) -> Self {
 		Self::Fatal(s)
+	}
+}
+
+/// EOF decode errors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(
+	feature = "with-codec",
+	derive(scale_codec::Encode, scale_codec::Decode, scale_info::TypeInfo)
+)]
+#[cfg_attr(feature = "with-serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum EofDecodeError {
+	/// Missing input while processing EOF.
+	MissingInput,
+	/// Missing body while processing EOF.
+	MissingBodyData,
+	/// Body size is more than specified in the header.
+	BodySizeMoreThanInHeader,
+	/// Invalid types section data.
+	InvalidTypesSectionData,
+	/// Invalid types section size.
+	InvalidTypesSectionSize,
+	/// Invalid EOF magic number.
+	InvalidEOFMagicNumber,
+	/// Invalid EOF version.
+	InvalidEOFVersion,
+	/// Invalid number for types kind
+	InvalidNumberForTypesKind,
+	/// Invalid number for code kind
+	InvalidNumberForCodeKind,
+	/// Invalid terminal byte
+	InvalidTerminalByte,
+	/// Invalid data kind
+	InvalidDataKind,
+	/// Invalid kind after code
+	InvalidKindAfterCode,
+	/// Mismatch of code and types sizes.
+	MismatchCodeAndTypesSize,
+	/// There should be at least one size.
+	SizesNotFound,
+	/// Missing size.
+	ShortInputForSizes,
+	/// Code size can't be zero
+	ZeroCodeSize,
+	/// Invalid code number.
+	TooManyCodeSections,
+	/// Invalid number of code sections.
+	InvalidNumberCodeSections,
+	/// Invalid container number.
+	InvalidNumberContainerSections,
+	/// Invalid initcode size.
+	InvalidEOFInitcodeSize,
+	/// Short body while processing EOF.
+	MissingBodyWithoutData,
+	/// Body size is more than specified in the header.
+	DanglingData,
+	/// Invalid types section data.
+	InvalidTypesSection,
+}
+
+impl From<EofDecodeError> for ExitError {
+	fn from(e: EofDecodeError) -> Self {
+		Self::EOFDecodeError(e)
 	}
 }

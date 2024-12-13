@@ -28,7 +28,9 @@ mod stack;
 pub mod utils;
 mod valids;
 
-pub use crate::error::{Capture, ExitError, ExitFatal, ExitReason, ExitRevert, ExitSucceed, Trap};
+pub use crate::error::{
+	Capture, EofDecodeError, ExitError, ExitFatal, ExitReason, ExitRevert, ExitSucceed, Trap,
+};
 pub use crate::external::ExternalOperation;
 pub use crate::memory::Memory;
 pub use crate::opcode::Opcode;
@@ -101,6 +103,64 @@ impl Machine {
 	/// Return a reference of the program counter.
 	pub const fn position(&self) -> &Result<usize, ExitReason> {
 		&self.position
+	}
+
+	/// Get the code with offset and increment the program counter.
+	/// If code range is out of bound, return empty slice.
+	///
+	/// ## Errors
+	/// Returns `ExitReason` if the program counter is invalid.
+	pub fn get_code_and_inc_pc(&mut self, offset: usize) -> Result<&[u8], ExitReason> {
+		let position = match &self.position {
+			Ok(pos) => *pos,
+			Err(e) => return Err(e.clone()),
+		};
+		let data = self
+			.code
+			.get(position..position + offset)
+			.unwrap_or_default();
+		self.position = Ok(position + offset);
+		Ok(data)
+	}
+
+	/// Increment the program counter with offset.
+	///
+	/// ## Errors
+	/// Returns `ExitReason` if the program counter is invalid.
+	pub fn inc_pc(&mut self, offset: usize) -> Result<(), ExitReason> {
+		let position = match &self.position {
+			Ok(pos) => *pos,
+			Err(e) => return Err(e.clone()),
+		};
+		self.position = Ok(position + offset);
+		Ok(())
+	}
+
+	/// Get the code with offset.
+	/// If code range is out of bound, return empty slice.
+	///
+	/// ## Errors
+	/// Returns `ExitReason` if the program counter is invalid.
+	pub fn get_code_with_offset(&mut self, offset: usize) -> Result<&[u8], ExitReason> {
+		let position = match &self.position {
+			Ok(pos) => *pos,
+			Err(e) => return Err(e.clone()),
+		};
+
+		Ok(self
+			.code
+			.get(position..position + offset)
+			.unwrap_or_default())
+	}
+
+	/// Set the program code. Usefuk for EOF.
+	pub fn set_code(&mut self, code: &[u8]) {
+		self.code = Rc::new(code.to_vec());
+	}
+
+	/// Set program counter. Useful for EOF.
+	pub fn set_pc(&mut self, position: usize) {
+		self.position = Ok(position);
 	}
 
 	/// Create a new machine with given code and data.

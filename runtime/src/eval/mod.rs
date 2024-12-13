@@ -1,7 +1,9 @@
 #[macro_use]
 mod macros;
+mod eof;
 mod system;
 
+use crate::context::ExtCallScheme;
 use crate::prelude::*;
 use crate::{CallScheme, ExitReason, Handler, Opcode, Runtime};
 use core::cmp::min;
@@ -11,6 +13,9 @@ pub enum Control<H: Handler> {
 	Continue,
 	CallInterrupt(H::CallInterrupt),
 	CreateInterrupt(H::CreateInterrupt),
+	// TODO: resolve clippy
+	#[allow(dead_code)]
+	EOFCreateInterrupt(H::EOFCreateInterrupt),
 	Exit(ExitReason),
 }
 
@@ -64,8 +69,41 @@ pub fn eval<H: Handler>(state: &mut Runtime, opcode: Opcode, handler: &mut H) ->
 		Opcode::TLOAD => system::tload(state, handler),
 		Opcode::TSTORE => system::tstore(state, handler),
 		Opcode::MCOPY => system::mcopy(state, handler),
+		//== EOF Related Opcodes ==//
+		Opcode::DATALOAD => eof::data::data_load(state),
+		Opcode::DATALOADN => eof::data::data_loadn(state),
+		Opcode::DATASIZE => eof::data::data_size(state),
+		Opcode::DATACOPY => eof::data::data_copy(state),
+		Opcode::RJUMP => eof::control::rjump(state, handler),
+		Opcode::RJUMPI => eof::control::rjumpi(state, handler),
+		Opcode::RJUMPV => eof::control::rjumpv(state, handler),
+		Opcode::CALLF => eof::call::callf(state, handler),
+		Opcode::RETF => system::retf(state, handler),
+		Opcode::JUMPF => system::jumpf(state, handler),
+		Opcode::DUPN => eof::stack::dupn(state),
+		Opcode::SWAPN => eof::stack::swapn(state),
+		Opcode::EXCHANGE => eof::stack::exchange(state),
+		Opcode::EOFCREATE => eof::contract::eof_create(state, handler),
+		Opcode::RETURNCONTRACT => system::return_contract(state, handler),
+		Opcode::RETURNDATALOAD => eof::ext::return_data_load(state, handler),
+		Opcode::EXTCALL => eof::ext::ext_call(state, handler, ExtCallScheme::ExtCall),
+		Opcode::EXTDELEGATECALL => {
+			eof::ext::ext_call(state, handler, ExtCallScheme::ExtDelegateCall)
+		}
+		Opcode::EXTSTATICCALL => eof::ext::ext_call(state, handler, ExtCallScheme::ExtStaticCall),
 		_ => handle_other(state, opcode, handler),
 	}
+}
+
+/// TODO: fix clippy
+#[allow(clippy::needless_pass_by_value)]
+pub fn finish_eof_create(
+	_runtime: &mut Runtime,
+	_reason: ExitReason,
+	_address: Option<H160>,
+	_return_data: Vec<u8>,
+) -> Result<(), ExitReason> {
+	todo!()
 }
 
 pub fn finish_create(

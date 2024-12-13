@@ -844,7 +844,54 @@ pub fn dynamic_opcode_cost<H: Handler>(
 			}
 		}
 
+		Opcode::EXTCALL if !is_static || (is_static && stack.peek(1)? == U256::zero()) => {
+			let target = stack.peek_h256(1)?.into();
+			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
+			GasCost::Call {
+				value: stack.peek(2)?,
+				gas: stack.peek(0)?,
+				target_is_cold,
+				delegated_designator_is_cold,
+				target_exists: {
+					handler.record_external_operation(evm_core::ExternalOperation::IsEmpty)?;
+					handler.exists(target)
+				},
+			}
+		}
+
 		Opcode::PUSH0 if config.has_push0 => GasCost::Base,
+
+		Opcode::DATALOAD if config.has_eof => GasCost::DataLoad,
+		Opcode::DATALOAD => GasCost::Invalid(opcode),
+
+		Opcode::DATALOADN if config.has_eof => GasCost::VeryLow,
+		Opcode::DATALOADN => GasCost::Invalid(opcode),
+
+		Opcode::DATASIZE if config.has_eof => GasCost::Base,
+		Opcode::DATASIZE => GasCost::Invalid(opcode),
+
+		Opcode::DATACOPY if config.has_eof => GasCost::VeryLowCopy {
+			len: stack.peek(2)?,
+		},
+		Opcode::DATACOPY => GasCost::Invalid(opcode),
+
+		Opcode::SWAPN | Opcode::DUPN | Opcode::EXCHANGE if config.has_eof => GasCost::VeryLow,
+		Opcode::SWAPN | Opcode::DUPN | Opcode::EXCHANGE => GasCost::Invalid(opcode),
+
+		Opcode::RETURNDATALOAD if config.has_eof => GasCost::VeryLow,
+		Opcode::RETURNDATALOAD => GasCost::Invalid(opcode),
+
+		Opcode::RJUMP if config.has_eof => GasCost::Base,
+		Opcode::RJUMP => GasCost::Invalid(opcode),
+
+		Opcode::RJUMPI if config.has_eof => GasCost::ConditionJump,
+		Opcode::RJUMPI => GasCost::Invalid(opcode),
+
+		Opcode::RJUMPV if config.has_eof => GasCost::ConditionJump,
+		Opcode::RJUMPV => GasCost::Invalid(opcode),
+
+		Opcode::CALLF if config.has_eof => GasCost::Low,
+		Opcode::CALLF => GasCost::Invalid(opcode),
 
 		_ => GasCost::Invalid(opcode),
 	};
@@ -900,6 +947,8 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		Opcode::DELEGATECALL | Opcode::STATICCALL => {
 			Some(peek_memory_cost(stack, 2, 3)?.join(peek_memory_cost(stack, 4, 5)?))
 		}
+
+		Opcode::DATACOPY => Some(peek_memory_cost(stack, 0, 2)?),
 
 		_ => None,
 	};
@@ -972,7 +1021,7 @@ impl<'config> Inner<'config> {
 				target_exists,
 				..
 			} => costs::call_cost(
-				value,
+				!value.is_zero(),
 				target_is_cold,
 				delegated_designator_is_cold,
 				true,
@@ -987,7 +1036,7 @@ impl<'config> Inner<'config> {
 				target_exists,
 				..
 			} => costs::call_cost(
-				value,
+				!value.is_zero(),
 				target_is_cold,
 				delegated_designator_is_cold,
 				true,
@@ -1001,7 +1050,7 @@ impl<'config> Inner<'config> {
 				target_exists,
 				..
 			} => costs::call_cost(
-				U256::zero(),
+				false,
 				target_is_cold,
 				delegated_designator_is_cold,
 				false,
@@ -1015,10 +1064,26 @@ impl<'config> Inner<'config> {
 				target_exists,
 				..
 			} => costs::call_cost(
-				U256::zero(),
+				false,
 				target_is_cold,
 				delegated_designator_is_cold,
 				false,
+				true,
+				!target_exists,
+				self.config,
+			),
+
+			GasCost::ExtCall {
+				value,
+				target_is_cold,
+				delegated_designator_is_cold,
+				target_exists,
+			} => costs::ext_call_cost(
+				gas,
+				!value.is_zero(),
+				target_is_cold,
+				delegated_designator_is_cold,
+				true,
 				true,
 				!target_exists,
 				self.config,
@@ -1050,6 +1115,9 @@ impl<'config> Inner<'config> {
 			GasCost::VeryLow => u64::from(consts::G_VERYLOW),
 			GasCost::Low => u64::from(consts::G_LOW),
 			GasCost::Invalid(opcode) => return Err(ExitError::InvalidCode(opcode)),
+
+			GasCost::DataLoad => consts::G_DATA_LOAD,
+			GasCost::ConditionJump => consts::G_CONDITION_JUMP,
 
 			GasCost::ExtCodeSize {
 				target_is_cold,
@@ -1192,6 +1260,18 @@ pub enum GasCost {
 		/// Whether the target exists.
 		target_exists: bool,
 	},
+	/// Gas cost for `EXTCALL`.
+	ExtCall {
+		/// Call value.
+		value: U256,
+		/// True if target has not been previously accessed in this transaction
+		target_is_cold: bool,
+		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
+		delegated_designator_is_cold: Option<bool>,
+		/// Whether the target exists.
+		target_exists: bool,
+	},
+
 	/// Gas cost for `SUICIDE`.
 	Suicide {
 		/// Value.
@@ -1258,6 +1338,10 @@ pub enum GasCost {
 		target_is_cold: bool,
 	},
 	WarmStorageRead,
+	/// Gas for EOF `DATALOAD`
+	DataLoad,
+	/// EOF RJUMPI
+	ConditionJump,
 }
 
 /// Storage opcode will access. Used for tracking accessed storage (EIP-2929).

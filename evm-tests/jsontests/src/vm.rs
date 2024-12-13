@@ -1,5 +1,6 @@
 use crate::state::{TestExecutionResult, VerboseOutput};
 use evm::backend::{ApplyBackend, MemoryAccount, MemoryBackend, MemoryVicinity};
+use evm::eof::FunctionStack;
 use evm::executor::stack::{MemoryStackState, StackExecutor, StackSubstateMetadata};
 use evm::Config;
 use primitive_types::{H160, H256, U256};
@@ -24,9 +25,7 @@ impl Test {
 			// (0x44), and so for older forks of Ethereum, the threshold value of 2^64 is used to
 			// distinguish between the two: if it's below, the value corresponds to the DIFFICULTY
 			// opcode, otherwise to the PREVRANDAO opcode.
-			let mut buf = [0u8; 32];
-			r.0.to_big_endian(&mut buf);
-			H256(buf)
+			H256(r.0.to_big_endian())
 		});
 
 		MemoryVicinity {
@@ -60,6 +59,8 @@ impl Test {
 			address: self.0.transaction.address.into(),
 			caller: self.0.transaction.sender.into(),
 			apparent_value: self.0.transaction.value.into(),
+			eof: None,
+			eof_function_stack: FunctionStack::default(),
 		}
 	}
 

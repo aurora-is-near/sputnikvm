@@ -62,11 +62,7 @@ impl Stack {
 	/// Return `ExitError`
 	#[inline]
 	pub fn pop_h256(&mut self) -> Result<H256, ExitError> {
-		self.pop().map(|it| {
-			let mut res = H256([0; 32]);
-			it.to_big_endian(&mut res.0);
-			res
-		})
+		self.pop().map(|it| H256(it.to_big_endian()))
 	}
 
 	/// Push a new value into the stack. If it will exceed the stack limit,
@@ -106,11 +102,7 @@ impl Stack {
 	/// # Errors
 	/// Return `ExitError`
 	pub fn peek_h256(&self, no_from_top: usize) -> Result<H256, ExitError> {
-		self.peek(no_from_top).map(|it| {
-			let mut res = H256([0; 32]);
-			it.to_big_endian(&mut res.0);
-			res
-		})
+		self.peek(no_from_top).map(|it| H256(it.to_big_endian()))
 	}
 
 	/// Peek a value at given index for the stack as usize.

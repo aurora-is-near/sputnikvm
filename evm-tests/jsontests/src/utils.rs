@@ -6,9 +6,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 pub fn u256_to_h256(u: U256) -> H256 {
-	let mut h = H256::default();
-	u.to_big_endian(&mut h[..]);
-	h
+	H256(u.to_big_endian())
 }
 
 pub fn unwrap_to_account(s: &ethjson::spec::Account) -> MemoryAccount {
@@ -108,11 +106,14 @@ pub fn check_valid_hash(h: &H256, b: &BTreeMap<H160, MemoryAccount>) -> (bool, H
 	let tree = b
 		.iter()
 		.map(|(address, account)| {
-			let storage_root = ethereum::util::sec_trie_root(
-				account
-					.storage
-					.iter()
-					.map(|(k, v)| (k, rlp::encode(&U256::from_big_endian(&v[..])))),
+			let storage_root = H256(
+				ethereum::util::sec_trie_root(
+					account
+						.storage
+						.iter()
+						.map(|(k, v)| (k, rlp::encode(&U256::from_big_endian(&v[..])))),
+				)
+				.0,
 			);
 			let code_hash = H256::from_slice(Keccak256::digest(&account.code).as_slice());
 
@@ -127,7 +128,7 @@ pub fn check_valid_hash(h: &H256, b: &BTreeMap<H160, MemoryAccount>) -> (bool, H
 		})
 		.collect::<Vec<_>>();
 
-	let root = ethereum::util::sec_trie_root(tree);
+	let root = H256(ethereum::util::sec_trie_root(tree).0);
 	let expect = h;
 	(root == *expect, root)
 }
@@ -414,8 +415,7 @@ pub mod transaction {
 
 				// all versioned blob hashes must start with VERSIONED_HASH_VERSION_KZG
 				for blob in test_tx.blob_versioned_hashes.iter() {
-					let mut blob_hash = H256([0; 32]);
-					blob.to_big_endian(&mut blob_hash[..]);
+					let blob_hash = H256(blob.to_big_endian());
 					if blob_hash[0] != super::eip_4844::VERSIONED_HASH_VERSION_KZG {
 						return Err(InvalidTxReason::BlobVersionNotSupported);
 					}
@@ -579,8 +579,8 @@ fn ecrecover(hash: H256, signature: &[u8]) -> Result<H160, ExitError> {
 /// v, r, s signature values to array
 fn vrs_to_arr(v: bool, r: U256, s: U256) -> [u8; 65] {
 	let mut result = [0u8; 65]; // (r, s, v), typed (uint256, uint256, uint8)
-	r.to_big_endian(&mut result[0..32]);
-	s.to_big_endian(&mut result[32..64]);
+	result[..32].copy_from_slice(&r.to_big_endian());
+	result[32..64].copy_from_slice(&s.to_big_endian());
 	result[64] = u8::from(v);
 	result
 }

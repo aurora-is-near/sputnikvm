@@ -19,3 +19,5 @@ pub const G_SHA3WORD: u32 = 6;
 pub const G_COPY: u32 = 3;
 pub const G_BLOCKHASH: u32 = 20;
 pub const G_CODEDEPOSIT: u32 = 200;
+pub const G_DATA_LOAD: u64 = 4;
+pub const G_CONDITION_JUMP: u64 = 4;
