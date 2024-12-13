@@ -1363,6 +1363,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		{
 			use evm_runtime::tracing::Event::Step;
 			evm_runtime::tracing::with(|listener| {
+				#[allow(clippy::used_underscore_binding)]
 				listener.event(Step {
 					address: *address,
 					opcode,
@@ -1409,10 +1410,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Interprete
 		{
 			use evm_runtime::tracing::Event::StepResult;
 			evm_runtime::tracing::with(|listener| {
+				#[allow(clippy::used_underscore_binding)]
 				listener.event(StepResult {
 					result: _result,
 					return_value: _machine.return_value().as_slice(),
-				})
+				});
 			});
 		}
 	}
