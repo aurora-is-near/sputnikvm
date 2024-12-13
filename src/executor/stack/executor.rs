@@ -611,18 +611,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
-		if self.nonce(caller) >= U64_MAX {
-			return (ExitError::MaxNonce.into(), Vec::new());
-		}
-
-		let address = self.create_address(CreateScheme::Legacy { caller });
-
 		event!(TransactCreate {
 			caller,
 			value,
 			init_code: &init_code,
 			gas_limit,
-			address,
+			address: self.create_address(CreateScheme::Legacy { caller }),
 		});
 
 		if let Some(limit) = self.config.max_initcode_size {
@@ -724,27 +718,26 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		gas_limit: u64,
 		access_list: Vec<(H160, Vec<H256>)>, // See EIP-2930
 	) -> (ExitReason, Vec<u8>) {
-		if let Some(limit) = self.config.max_initcode_size {
-			if init_code.len() > limit {
-				self.state.metadata_mut().gasometer.fail();
-				return emit_exit!(ExitError::CreateContractLimit.into(), Vec::new());
-			}
-		}
-
 		let code_hash = H256::from_slice(Keccak256::digest(&init_code).as_slice());
-		let address = self.create_address(CreateScheme::Create2 {
-			caller,
-			code_hash,
-			salt,
-		});
 		event!(TransactCreate2 {
 			caller,
 			value,
 			init_code: &init_code,
 			salt,
 			gas_limit,
-			address,
+			address: self.create_address(CreateScheme::Create2 {
+				caller,
+				code_hash,
+				salt,
+			}),
 		});
+
+		if let Some(limit) = self.config.max_initcode_size {
+			if init_code.len() > limit {
+				self.state.metadata_mut().gasometer.fail();
+				return emit_exit!(ExitError::CreateContractLimit.into(), Vec::new());
+			}
+		}
 
 		if let Err(e) = self.record_create_transaction_cost(&init_code, &access_list) {
 			return emit_exit!(e.into(), Vec::new());
@@ -878,7 +871,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		self.state.basic(address).nonce
 	}
 
-	/// Check if the existing account is "create collision".    
+	/// Check if the existing account is "create collision".
 	/// [EIP-7610](https://eips.ethereum.org/EIPS/eip-7610)
 	pub fn is_create_collision(&self, address: H160) -> bool {
 		!self.code(address).is_empty()
@@ -948,11 +941,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				let coinbase = self.block_coinbase();
 				self.state
 					.metadata_mut()
-					.access_addresses([caller, address, coinbase].iter().copied());
+					.access_addresses(addresses.iter().copied().chain(Some(coinbase)));
 			} else {
 				self.state
 					.metadata_mut()
-					.access_addresses([caller, address].iter().copied());
+					.access_addresses(addresses.iter().copied());
 			};
 
 			self.warm_access_list(access_list);
