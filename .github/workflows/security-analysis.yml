@@ -11,5 +11,5 @@ on:
 jobs:
   contract_analysis:
     name: "Shared"
-    uses: aurora-is-near/.github/.github/workflows/security_analysis.yml@master
+    uses: aurora-is-near/.github/.github/workflows/security_analysis.yml@feat/versioned-matrix-helper
     secrets: inherit
