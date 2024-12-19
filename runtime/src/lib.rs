@@ -683,7 +683,7 @@ impl DerivedConfigInputs {
 		let mut config = Self::cancun();
 		config.has_authorization_list = true;
 		config.gas_per_empty_account_cost = 25000;
-		config.gas_per_auth_base_cost = 2500;
+		config.gas_per_auth_base_cost = 12500;
 		config
 	}
 }
