@@ -930,16 +930,18 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	/// Authorized accounts behavior.
 	///
 	/// According to `EIP-7702` behavior section should be several steps of verifications.
-	/// Current function includes steps 3-8 from the spec:
-	/// 3. Add `authority` to `accessed_addresses`
-	/// 4. Verify the code of `authority` is either empty or already delegated.
-	/// 5. Verify the `nonce` of `authority` is equal to `nonce` (of address).
-	/// 7. Set the code of `authority` to be `0xef0100 || address`. This is a delegation designation.
-	/// 8. Increase the `nonce` of `authority` by one.
+	/// Current function includes steps 2.4-9 from the spec:
+	/// 2. Verify the `nonce` is less than `2**64 - 1`.
+	/// 4. Add `authority` to `accessed_addresses`
+	/// 5. Verify the code of `authority` is either empty or already delegated.
+	/// 6. Verify the `nonce` of `authority` is equal to `nonce` (of address).
+	/// 7. Add `PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST` gas to the global refund counter if authority exists in the trie.
+	/// 8. Set the code of `authority` to be `0xef0100 || address`. This is a delegation designation.
+	/// 9. Increase the `nonce` of `authority` by one.
 	///
-	/// It means, that steps 1-2 of spec must be passed before calling this function:
+	/// It means, that steps 1,3 of spec must be passed before calling this function:
 	/// 1 Verify the chain id is either 0 or the chain’s current ID.
-	/// 2. `authority = ecrecover(...)`
+	/// 3. `authority = ecrecover(...)`
 	///
 	/// See: [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702#behavior)
 	///
@@ -957,30 +959,34 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		let state = self.state_mut();
 		let mut warm_authority: Vec<H160> = Vec::with_capacity(authorization_list.len());
 		for authority in authorization_list {
-			// If EIP-7703 Spec validation steps 1 or 2 return false.
+			// If EIP-7702 Spec validation steps 1, 3 return false.
 			if !authority.is_valid {
 				continue;
 			}
-			// 3. Add authority to accessed_addresses (as defined in EIP-2929)
+			// 2. Verify the `nonce` is less than `2**64 - 1`.
+			if U256::from(authority.nonce) >= U64_MAX - 1 {
+				continue;
+			}
+			// 4. Add authority to accessed_addresses (as defined in EIP-2929)
 			warm_authority.push(authority.authority);
-			// 4. Verify the code of authority is either empty or already delegated.
+			// 5. Verify the code of authority is either empty or already delegated.
 			let authority_code = state.code(authority.authority);
 			if !authority_code.is_empty() && !Authorization::is_delegated(&authority_code) {
 				continue;
 			}
 
-			// 5. Verify the nonce of authority is equal to nonce.
+			// 6. Verify the nonce of authority is equal to nonce.
 			if state.basic(authority.authority).nonce != U256::from(authority.nonce) {
 				continue;
 			}
 
-			// 6. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter if authority exists in the trie.
+			// 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter if authority exists in the trie.
 			if !state.is_empty(authority.authority) {
 				refunded_accounts += 1;
 			}
-			// 7. Set the code of authority to be `0xef0100 || address`. This is a delegation designation.
+			// 8. Set the code of authority to be `0xef0100 || address`. This is a delegation designation.
 			state.set_code(authority.authority, authority.delegation_code());
-			// 8. Increase the nonce of authority by one.
+			// 9. Increase the nonce of authority by one.
 			state.inc_nonce(authority.authority)?;
 
 			// Add to authority access list cache
@@ -1442,7 +1448,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	/// Provide a default implementation by fetching the code.
 	///
 	/// According to EIP-7702, the code size of an address is the size of the
-	/// delegated address code size.
+	/// `0xef01` - `2`.
+	/// <https://eips.ethereum.org/EIPS/eip-7702#delegation-designation>
 	fn code_size(&mut self, address: H160) -> U256 {
 		let target_code = self.authority_code(address);
 		U256::from(target_code.len())
@@ -1452,7 +1459,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	/// Provide a default implementation by fetching the code.
 	///
 	/// According to EIP-7702, the code hash of an address is the hash of the
-	/// delegated address code hash.
+	/// `keccak256(0xef01): 0xeadcdba66a79ab5dce91622d1d75c8cff5cff0b96944c3bf1072cd08ce018329`.
+	/// <https://eips.ethereum.org/EIPS/eip-7702#delegation-designation>
 	fn code_hash(&mut self, address: H160) -> H256 {
 		if !self.exists(address) {
 			return H256::default();
