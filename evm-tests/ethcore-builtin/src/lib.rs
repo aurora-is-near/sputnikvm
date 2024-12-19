@@ -1159,8 +1159,7 @@ impl Bn128Pairing {
 			}
 		};
 
-		let mut buf = [0u8; 32];
-		ret_val.to_big_endian(&mut buf);
+		let buf = ret_val.to_big_endian();
 		output.write(0, &buf);
 
 		Ok(())

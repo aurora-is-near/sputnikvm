@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Open Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![allow(clippy::too_long_first_doc_paragraph)]
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub mod avx2;
 pub mod portable;
