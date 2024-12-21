@@ -1451,6 +1451,14 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	/// `0xef01` - `2`.
 	/// <https://eips.ethereum.org/EIPS/eip-7702#delegation-designation>
 	fn code_size(&mut self, address: H160) -> U256 {
+		// TODO: modify to new pectra-devnet-5
+		//  If deleted account, return size equal to 2 bytes
+		// if self.get_authority_target(address).is_some() {
+		// 	U256::from(2)
+		// } else {
+		// 	let target_code = self.authority_code(address);
+		// 	U256::from(target_code.len())
+		// }
 		let target_code = self.authority_code(address);
 		U256::from(target_code.len())
 	}
@@ -1462,6 +1470,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	/// `keccak256(0xef01): 0xeadcdba66a79ab5dce91622d1d75c8cff5cff0b96944c3bf1072cd08ce018329`.
 	/// <https://eips.ethereum.org/EIPS/eip-7702#delegation-designation>
 	fn code_hash(&mut self, address: H160) -> H256 {
+		// TODO: modify to new pectra-devnet-5
 		if !self.exists(address) {
 			return H256::default();
 		}
