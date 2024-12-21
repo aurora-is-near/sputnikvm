@@ -86,7 +86,7 @@ jobs:
 
       - name: Download Ethereum spec tests fixtures
         run: |
-          wget https://github.com/ethereum/execution-spec-tests/releases/download/pectra-devnet-3%40v1.5.0/fixtures_pectra-devnet-3.tar.gz
+          wget https://github.com/ethereum/execution-spec-tests/releases/download/pectra-devnet-4%40v1.0.1/fixtures_pectra-devnet-4.tar.gz
           mkdir ethereum-spec-tests
           tar -xzf fixtures_pectra-devnet-3.tar.gz -C ethereum-spec-tests
           tree ethereum-spec-tests/fixtures/state_tests/prague/eip7702_set_code_tx
