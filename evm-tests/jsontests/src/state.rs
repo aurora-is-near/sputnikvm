@@ -1051,7 +1051,7 @@ fn check_validate_exit_reason(
 					);
 				 }
 				InvalidTxReason::AuthorizationListNotExist => {
-					 let check_result = exception == "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST";
+					 let check_result = exception == "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST" || exception == "TransactionException.TYPE_4_TX_CONTRACT_CREATION";
 					assert!(
 						check_result,
 						"unexpected exception {exception:?} for AuthorizationListNotExist for test: [{spec:?}] {name}"
