@@ -963,10 +963,12 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			if !authority.is_valid {
 				continue;
 			}
+
 			// 2. Verify the `nonce` is less than `2**64 - 1`.
-			if U256::from(authority.nonce) >= U64_MAX - 1 {
+			if U256::from(authority.nonce) >= U64_MAX {
 				continue;
 			}
+
 			// 4. Add authority to accessed_addresses (as defined in EIP-2929)
 			warm_authority.push(authority.authority);
 			// 5. Verify the code of authority is either empty or already delegated.
