@@ -617,6 +617,16 @@ fn get_and_set_warm<H: Handler>(handler: &mut H, target: H160) -> (bool, Option<
 	(target_is_cold, delegated_designator_is_cold)
 }
 
+/// Get and set warm address if it's not warmed for non-delegated opcodes like `EXT*`.
+/// NOTE: Related to EIP-7702
+fn get_and_set_non_delegated_warm<H: Handler>(handler: &mut H, target: H160) -> bool {
+	let target_is_cold = handler.is_cold(target, None);
+	if target_is_cold {
+		handler.warm_target((target, None));
+	}
+	target_is_cold
+}
+
 /// Calculate the opcode cost.
 ///
 /// # Errors
@@ -674,11 +684,8 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::EXTCODESIZE => {
 			let target = stack.peek_h256(0)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
-			GasCost::ExtCodeSize {
-				target_is_cold,
-				delegated_designator_is_cold,
-			}
+			let target_is_cold = get_and_set_non_delegated_warm(handler, target);
+			GasCost::ExtCodeSize { target_is_cold }
 		}
 		Opcode::BALANCE => {
 			let target = stack.peek_h256(0)?.into();
@@ -1051,12 +1058,9 @@ impl<'config> Inner<'config> {
 			GasCost::Low => u64::from(consts::G_LOW),
 			GasCost::Invalid(opcode) => return Err(ExitError::InvalidCode(opcode)),
 
-			GasCost::ExtCodeSize {
+			GasCost::ExtCodeSize { target_is_cold } => costs::address_access_cost(
 				target_is_cold,
-				delegated_designator_is_cold,
-			} => costs::address_access_cost(
-				target_is_cold,
-				delegated_designator_is_cold,
+				None,
 				self.config.gas_ext_code,
 				self.config,
 			),
@@ -1126,8 +1130,6 @@ pub enum GasCost {
 	ExtCodeSize {
 		/// True if address has not been previously accessed in this transaction
 		target_is_cold: bool,
-		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
-		delegated_designator_is_cold: Option<bool>,
 	},
 	/// Gas cost for `BALANCE`.
 	Balance {

@@ -1451,16 +1451,13 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	/// `0xef01` - `2`.
 	/// <https://eips.ethereum.org/EIPS/eip-7702#delegation-designation>
 	fn code_size(&mut self, address: H160) -> U256 {
-		// TODO: modify to new pectra-devnet-5
 		//  If deleted account, return size equal to 2 bytes
-		// if self.get_authority_target(address).is_some() {
-		// 	U256::from(2)
-		// } else {
-		// 	let target_code = self.authority_code(address);
-		// 	U256::from(target_code.len())
-		// }
-		let target_code = self.authority_code(address);
-		U256::from(target_code.len())
+		if self.get_authority_target(address).is_some() {
+			U256::from(2)
+		} else {
+			let target_code = self.authority_code(address);
+			U256::from(target_code.len())
+		}
 	}
 
 	/// Fetch the code hash of an address.
@@ -1470,17 +1467,21 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 	/// `keccak256(0xef01): 0xeadcdba66a79ab5dce91622d1d75c8cff5cff0b96944c3bf1072cd08ce018329`.
 	/// <https://eips.ethereum.org/EIPS/eip-7702#delegation-designation>
 	fn code_hash(&mut self, address: H160) -> H256 {
-		// TODO: modify to new pectra-devnet-5
+		// For EIP-7702 Hash of `EF01` bytes that is used for `EXTCODEHASH` when called from delegated address.
+		pub const EIP7702_MAGIC_HASH: [u8; 32] = [
+			0xEA, 0xDC, 0xDB, 0xA6, 0x6A, 0x79, 0xAB, 0x5D, 0xCE, 0x91, 0x62, 0x2D, 0x1D, 0x75,
+			0xC8, 0xCF, 0xF5, 0xCF, 0xF0, 0xB9, 0x69, 0x44, 0xC3, 0xBF, 0x10, 0x72, 0xCD, 0x08,
+			0xCE, 0x01, 0x83, 0x29,
+		];
+
 		if !self.exists(address) {
 			return H256::default();
 		}
-		if let Some(target) = self.get_authority_target(address) {
-			if !self.exists(target) {
-				return H256::default();
-			}
+		if self.get_authority_target(address).is_some() {
+			H256::from(EIP7702_MAGIC_HASH)
+		} else {
+			H256::from_slice(Keccak256::digest(self.code(address)).as_slice())
 		}
-		let code = self.authority_code(address);
-		H256::from_slice(Keccak256::digest(code).as_slice())
 	}
 
 	/// Get account code
