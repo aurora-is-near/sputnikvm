@@ -699,11 +699,8 @@ pub fn dynamic_opcode_cost<H: Handler>(
 
 		Opcode::EXTCODEHASH if config.has_ext_code_hash => {
 			let target = stack.peek_h256(0)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
-			GasCost::ExtCodeHash {
-				target_is_cold,
-				delegated_designator_is_cold,
-			}
+			let target_is_cold = get_and_set_non_delegated_warm(handler, target);
+			GasCost::ExtCodeHash { target_is_cold }
 		}
 		Opcode::EXTCODEHASH => GasCost::Invalid(opcode),
 
@@ -739,10 +736,9 @@ pub fn dynamic_opcode_cost<H: Handler>(
 		},
 		Opcode::EXTCODECOPY => {
 			let target = stack.peek_h256(0)?.into();
-			let (target_is_cold, delegated_designator_is_cold) = get_and_set_warm(handler, target);
+			let target_is_cold = get_and_set_non_delegated_warm(handler, target);
 			GasCost::ExtCodeCopy {
 				target_is_cold,
-				delegated_designator_is_cold,
 				len: stack.peek(3)?,
 			}
 		}
@@ -1066,14 +1062,8 @@ impl<'config> Inner<'config> {
 			),
 			GasCost::ExtCodeCopy {
 				target_is_cold,
-				delegated_designator_is_cold,
 				len,
-			} => costs::extcodecopy_cost(
-				len,
-				target_is_cold,
-				delegated_designator_is_cold,
-				self.config,
-			)?,
+			} => costs::extcodecopy_cost(len, target_is_cold, None, self.config)?,
 			GasCost::Balance { target_is_cold } => costs::address_access_cost(
 				target_is_cold,
 				None,
@@ -1081,12 +1071,9 @@ impl<'config> Inner<'config> {
 				self.config,
 			),
 			GasCost::BlockHash => u64::from(consts::G_BLOCKHASH),
-			GasCost::ExtCodeHash {
+			GasCost::ExtCodeHash { target_is_cold } => costs::address_access_cost(
 				target_is_cold,
-				delegated_designator_is_cold,
-			} => costs::address_access_cost(
-				target_is_cold,
-				delegated_designator_is_cold,
+				None,
 				self.config.gas_ext_code_hash,
 				self.config,
 			),
@@ -1142,8 +1129,6 @@ pub enum GasCost {
 	ExtCodeHash {
 		/// True if address has not been previously accessed in this transaction
 		target_is_cold: bool,
-		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
-		delegated_designator_is_cold: Option<bool>,
 	},
 
 	/// Gas cost for `CALL`.
@@ -1232,8 +1217,6 @@ pub enum GasCost {
 	ExtCodeCopy {
 		/// True if target has not been previously accessed in this transaction
 		target_is_cold: bool,
-		/// True if delegated designator of authority has not been previously accessed in this transaction (EIP-7702)
-		delegated_designator_is_cold: Option<bool>,
 		/// Length.
 		len: U256,
 	},
