@@ -987,7 +987,13 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 				refunded_accounts += 1;
 			}
 			// 8. Set the code of authority to be `0xef0100 || address`. This is a delegation designation.
-			state.set_code(authority.authority, authority.delegation_code());
+			// * As a special case, if address is 0x0000000000000000000000000000000000000000 do not write the designation.
+			//   Clear the account’s code.
+			if authority.address.is_zero() {
+				state.set_code(authority.authority, Vec::new());
+			} else {
+				state.set_code(authority.authority, authority.delegation_code());
+			}
 			// 9. Increase the nonce of authority by one.
 			state.inc_nonce(authority.authority)?;
 
