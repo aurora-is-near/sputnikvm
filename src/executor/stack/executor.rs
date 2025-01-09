@@ -1167,6 +1167,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		// EIP-7702 - get delegated designation address code
 		// Detect loop for Delegated designation
 		let code = self.authority_code(code_address);
+		println!("--> CALL: {code_address:?} | {:?}", code);
 		// Warm Delegated address after access
 		if let Some(target_address) = self.get_authority_target(code_address) {
 			self.warm_target((target_address, None));
@@ -1485,7 +1486,13 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		if !self.exists(address) {
 			return H256::default();
 		}
+		// TODOFEE
+		#[cfg(feature = "print-debug")]
+		println!("CODE_HASH");
 		if self.get_authority_target(address).is_some() {
+			// TODOFEE
+			#[cfg(feature = "print-debug")]
+			println!("AUTH CODE_HASH");
 			H256::from(EIP7702_MAGIC_HASH)
 		} else {
 			H256::from_slice(Keccak256::digest(self.code(address)).as_slice())

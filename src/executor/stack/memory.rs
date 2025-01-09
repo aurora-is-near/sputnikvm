@@ -368,7 +368,11 @@ impl<'config> MemoryStackSubstate<'config> {
 	}
 
 	pub fn set_storage(&mut self, address: H160, key: H256, value: H256) {
+		// TODOFEE
+		#[cfg(feature = "print-debug")]
+		println!("    [SSTORE {address:?}] {key:?}:{value:?}");
 		self.storages.insert((address, key), value);
+		let v = self.storages.get(&(address, key));
 	}
 
 	pub fn reset_storage<B: Backend>(&mut self, address: H160, backend: &B) {

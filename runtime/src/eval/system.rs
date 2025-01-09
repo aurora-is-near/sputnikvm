@@ -163,7 +163,7 @@ pub fn extcodecopy<H: Handler>(runtime: &mut Runtime, handler: &mut H) -> Contro
 		memory_offset,
 		code_offset,
 		len,
-		&handler.authority_code(address.into()),
+		&handler.code(address.into()),
 	) {
 		Ok(()) => (),
 		Err(e) => return Control::Exit(e.into()),
