@@ -18,7 +18,7 @@
 
 use crate::{IV, SIGMA};
 
-/// The G mixing function. See https://tools.ietf.org/html/rfc7693#section-3.1
+/// The G mixing function. See <https://tools.ietf.org/html/rfc7693#section-3.1>
 #[inline(always)]
 fn g(v: &mut [u64], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64) {
 	v[a] = v[a].wrapping_add(v[b]).wrapping_add(x);
