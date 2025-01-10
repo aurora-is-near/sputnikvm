@@ -64,7 +64,7 @@ impl<'a> Deserialize<'a> for Uint {
 
 struct UintVisitor;
 
-impl<'a> Visitor<'a> for UintVisitor {
+impl Visitor<'_> for UintVisitor {
 	type Value = Uint;
 
 	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
