@@ -1184,7 +1184,7 @@ fn test_run(
 		// even if `caller_code` is non-empty transaction should be executed.
 		let is_delegated = original_state
 			.get(&caller)
-			.map_or(false, |c| Authorization::is_delegated(&c.code));
+			.is_some_and(|c| Authorization::is_delegated(&c.code));
 
 		for (i, state) in states.iter().enumerate() {
 			let transaction = test_tx.select(&state.indexes);
