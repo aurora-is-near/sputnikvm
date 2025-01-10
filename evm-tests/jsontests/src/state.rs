@@ -1086,9 +1086,9 @@ fn test_run(
 	let test_tx = &test.0.transaction;
 	for (spec, states) in &test.0.post_states {
 		// TODOFEE
-		if name != "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_delegation_clearing[fork_Prague-state_test-delegated_account-not_self_sponsored]" {
-		continue;
-				}
+		// if name != "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_delegation_clearing[fork_Prague-state_test-delegated_account-not_self_sponsored]" {
+		// continue;
+		// 		}
 		// Run tests for specific SPEC (Hard fork)
 		if let Some(s) = specific_spec.as_ref() {
 			if s != spec {

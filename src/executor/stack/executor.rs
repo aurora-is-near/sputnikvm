@@ -150,6 +150,11 @@ impl Accessed {
 	/// Get authority from the accessed authority list (EIP-7702).
 	#[must_use]
 	pub fn get_authority_target(&self, authority: H160) -> Option<H160> {
+		// TODOFEE
+		// println!(
+		// 	"EX get_authority_target: {:?} for {authority:?}",
+		// 	self.authority
+		// );
 		self.authority.get(&authority).copied()
 	}
 
@@ -989,7 +994,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			// 8. Set the code of authority to be `0xef0100 || address`. This is a delegation designation.
 			// * As a special case, if address is 0x0000000000000000000000000000000000000000 do not write the designation.
 			//   Clear the account’s code.
+			let mut delegation_clearing = false;
 			if authority.address.is_zero() {
+				delegation_clearing = true;
 				state.set_code(authority.authority, Vec::new());
 			} else {
 				state.set_code(authority.authority, authority.delegation_code());
@@ -998,11 +1005,13 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			state.inc_nonce(authority.authority)?;
 
 			// Add to authority access list cache
-			state
-				.metadata_mut()
-				.add_authority(authority.authority, authority.address);
+			if !delegation_clearing {
+				state
+					.metadata_mut()
+					.add_authority(authority.authority, authority.address);
+			}
 		}
-		// Warm addresses for [Step 3].
+		// Warm addresses for [Step 4].
 		self.state
 			.metadata_mut()
 			.access_addresses(warm_authority.into_iter());
@@ -1167,7 +1176,6 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 		// EIP-7702 - get delegated designation address code
 		// Detect loop for Delegated designation
 		let code = self.authority_code(code_address);
-		println!("--> CALL: {code_address:?} | {:?}", code);
 		// Warm Delegated address after access
 		if let Some(target_address) = self.get_authority_target(code_address) {
 			self.warm_target((target_address, None));
@@ -1488,11 +1496,11 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		}
 		// TODOFEE
 		#[cfg(feature = "print-debug")]
-		println!("CODE_HASH");
+		println!("# CODE_HASH for: {address:?}");
 		if self.get_authority_target(address).is_some() {
 			// TODOFEE
 			#[cfg(feature = "print-debug")]
-			println!("AUTH CODE_HASH");
+			println!("# CODE_HASH: AUTH");
 			H256::from(EIP7702_MAGIC_HASH)
 		} else {
 			H256::from_slice(Keccak256::digest(self.code(address)).as_slice())

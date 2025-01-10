@@ -460,11 +460,11 @@ pub mod transaction {
 			// Other validation step inside EVM transact logic.
 			for auth in test_tx.authorization_list.iter() {
 				// 1. Verify the chain id is either 0 or the chain’s current ID.
-				let mut is_valid =
-					auth.chain_id.0 == U256::from(0) || auth.chain_id.0 == vicinity.chain_id;
-				if auth.chain_id.0 > U256::from(u64::MAX) {
-					is_valid = false;
-				}
+				let mut is_valid = if auth.chain_id.0 > U256::from(u64::MAX) {
+					false
+				} else {
+					auth.chain_id.0 == U256::from(0) || auth.chain_id.0 == vicinity.chain_id
+				};
 				// 3. `authority = ecrecover(keccak(MAGIC || rlp([chain_id, address, nonce])), y_parity, r, s]`
 
 				// Validate the signature, as in tests it is possible to have invalid signatures values.
