@@ -96,7 +96,7 @@ impl<'vicinity> MemoryBackend<'vicinity> {
 	}
 }
 
-impl<'vicinity> Backend for MemoryBackend<'vicinity> {
+impl Backend for MemoryBackend<'_> {
 	#[allow(clippy::misnamed_getters)]
 	fn gas_price(&self) -> U256 {
 		self.vicinity.effective_gas_price
@@ -186,7 +186,7 @@ impl<'vicinity> Backend for MemoryBackend<'vicinity> {
 	}
 }
 
-impl<'vicinity> ApplyBackend for MemoryBackend<'vicinity> {
+impl ApplyBackend for MemoryBackend<'_> {
 	fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool)
 	where
 		A: IntoIterator<Item = Apply<I>>,

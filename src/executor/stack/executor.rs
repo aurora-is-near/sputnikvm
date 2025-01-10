@@ -1360,8 +1360,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	}
 }
 
-impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> InterpreterHandler
-	for StackExecutor<'config, 'precompiles, S, P>
+impl<'config, S: StackState<'config>, P: PrecompileSet> InterpreterHandler
+	for StackExecutor<'config, '_, S, P>
 {
 	#[inline]
 	fn before_eval(&mut self) {}
@@ -1442,8 +1442,8 @@ pub struct StackExecutorCallInterrupt<'borrow>(TaggedRuntime<'borrow>);
 
 pub struct StackExecutorCreateInterrupt<'borrow>(TaggedRuntime<'borrow>);
 
-impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
-	for StackExecutor<'config, 'precompiles, S, P>
+impl<'config, S: StackState<'config>, P: PrecompileSet> Handler
+	for StackExecutor<'config, '_, S, P>
 {
 	type CreateInterrupt = StackExecutorCreateInterrupt<'static>;
 	type CreateFeedback = Infallible;
@@ -1802,8 +1802,8 @@ struct StackExecutorHandle<'inner, 'config, 'precompiles, S, P> {
 	is_static: bool,
 }
 
-impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> PrecompileHandle
-	for StackExecutorHandle<'inner, 'config, 'precompiles, S, P>
+impl<'config, S: StackState<'config>, P: PrecompileSet> PrecompileHandle
+	for StackExecutorHandle<'_, 'config, '_, S, P>
 {
 	// Perform subcall in provided context.
 	/// Precompile specifies in which context the subcall is executed.
