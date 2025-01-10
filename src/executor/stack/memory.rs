@@ -368,7 +368,6 @@ impl<'config> MemoryStackSubstate<'config> {
 	}
 
 	pub fn set_storage(&mut self, address: H160, key: H256, value: H256) {
-		// TODOFEE
 		#[cfg(feature = "print-debug")]
 		println!("    [SSTORE {address:?}] {key:?}:{value:?}");
 		self.storages.insert((address, key), value);
@@ -500,20 +499,14 @@ impl<'config> MemoryStackSubstate<'config> {
 	/// Get authority target from the current state. If it's `None` just take a look
 	/// recursively in the parent state.
 	fn get_authority_target_recursive(&self, authority: H160) -> Option<H160> {
-		// TODOFEE
-		// println!("get_authority_target_recursive");
 		if let Some(target) = self
 			.metadata
 			.accessed()
 			.as_ref()
 			.and_then(|accessed| accessed.get_authority_target(authority))
 		{
-			// TODOFEE
-			// println!("target recursive result: {:?}", target);
 			return Some(target);
 		}
-		// TODOFEE
-		// println!("get_authority_target_recursive NEXT");
 		self.parent
 			.as_ref()
 			.and_then(|p| p.get_authority_target_recursive(authority))

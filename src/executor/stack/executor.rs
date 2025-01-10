@@ -150,11 +150,6 @@ impl Accessed {
 	/// Get authority from the accessed authority list (EIP-7702).
 	#[must_use]
 	pub fn get_authority_target(&self, authority: H160) -> Option<H160> {
-		// TODOFEE
-		// println!(
-		// 	"EX get_authority_target: {:?} for {authority:?}",
-		// 	self.authority
-		// );
 		self.authority.get(&authority).copied()
 	}
 
@@ -1494,13 +1489,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Handler
 		if !self.exists(address) {
 			return H256::default();
 		}
-		// TODOFEE
-		#[cfg(feature = "print-debug")]
-		println!("# CODE_HASH for: {address:?}");
 		if self.get_authority_target(address).is_some() {
-			// TODOFEE
-			#[cfg(feature = "print-debug")]
-			println!("# CODE_HASH: AUTH");
 			H256::from(EIP7702_MAGIC_HASH)
 		} else {
 			H256::from_slice(Keccak256::digest(self.code(address)).as_slice())

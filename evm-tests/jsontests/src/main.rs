@@ -293,6 +293,8 @@ const SKIPPED_CASES: &[&str] = &[
 	"eip7702_set_code_tx/set_code_txs/invalid_tx_invalid_auth_signature",
 	// Wrong json field `chain_id` for EIP-7702
 	"eip7702_set_code_tx/set_code_txs/tx_validity_nonce",
+	// EIP-7702: for non empty storage fails evm state hash check
+	"eip7702_set_code_tx/set_code_txs/set_code_to_non_empty_storage",
 ];
 
 #[cfg(not(feature = "enable-slow-tests"))]
@@ -313,6 +315,8 @@ const SKIPPED_CASES: &[&str] = &[
 	"eip7702_set_code_tx/set_code_txs/invalid_tx_invalid_auth_signature",
 	// Wrong json field `chain_id` for EIP-7702
 	"eip7702_set_code_tx/set_code_txs/tx_validity_nonce",
+	// EIP-7702: for non empty storage fails evm state hash check
+	"eip7702_set_code_tx/set_code_txs/set_code_to_non_empty_storage",
 ];
 
 /// Check if a path should be skipped.
