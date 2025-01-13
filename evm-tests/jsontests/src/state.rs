@@ -942,9 +942,7 @@ fn check_validate_exit_reason(
 ) -> bool {
 	expect_exception.as_deref().map_or_else(
 		|| {
-			// TODO: dev-pectra-5 tests
-			true
-			// panic!("unexpected validation error reason: {reason:?} {name}");
+			panic!("unexpected validation error reason: {reason:?} {name}");
 		},
 		|exception| {
 			match reason {

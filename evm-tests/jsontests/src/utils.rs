@@ -447,15 +447,6 @@ pub mod transaction {
 				return Err(InvalidTxReason::AuthorizationListNotExist);
 			}
 
-			// The field `to` deviates slightly from the semantics with the exception
-			// that it MUST NOT be nil and therefore must always represent
-			// a 20-byte address. This means that blob transactions cannot
-			// have the form of a create transaction.
-			let to_address: Option<Address> = test_tx.to.clone().into();
-			if to_address.is_none() {
-				return Err(InvalidTxReason::CreateTransaction);
-			}
-
 			// Check EIP-7702 Spec validation steps: 1 and 2
 			// Other validation step inside EVM transact logic.
 			for auth in test_tx.authorization_list.iter() {
