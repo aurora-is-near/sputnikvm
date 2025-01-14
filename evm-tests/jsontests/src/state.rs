@@ -942,7 +942,7 @@ fn check_validate_exit_reason(
 ) -> bool {
 	expect_exception.as_deref().map_or_else(
 		|| {
-			panic!("unexpected validation error reason: {reason:?}");
+			panic!("unexpected validation error reason: {reason:?} {name}");
 		},
 		|exception| {
 			match reason {
@@ -1034,6 +1034,13 @@ fn check_validate_exit_reason(
 						"unexpected exception {exception:?} for BlobVersionedHashesNotSupported for test: [{spec:?}] {name}"
 					);
 				},
+				InvalidTxReason::InvalidAuthorizationChain => {
+					let check_result = exception == "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT";
+					assert!(
+						check_result,
+						"unexpected exception {exception:?} for InvalidAuthorizationChain for test: [{spec:?}] {name}"
+					);
+				}
 				InvalidTxReason::InvalidAuthorizationSignature => {
 					let check_result = exception == "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE";
 					assert!(
@@ -1042,7 +1049,7 @@ fn check_validate_exit_reason(
 					);
 				 }
 				InvalidTxReason::AuthorizationListNotExist => {
-					 let check_result = exception == "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST";
+					 let check_result = exception == "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST" || exception == "TransactionException.TYPE_4_TX_CONTRACT_CREATION";
 					assert!(
 						check_result,
 						"unexpected exception {exception:?} for AuthorizationListNotExist for test: [{spec:?}] {name}"
@@ -1175,7 +1182,7 @@ fn test_run(
 		// even if `caller_code` is non-empty transaction should be executed.
 		let is_delegated = original_state
 			.get(&caller)
-			.map_or(false, |c| Authorization::is_delegated(&c.code));
+			.is_some_and(|c| Authorization::is_delegated(&c.code));
 
 		for (i, state) in states.iter().enumerate() {
 			let transaction = test_tx.select(&state.indexes);

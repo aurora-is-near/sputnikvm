@@ -447,35 +447,29 @@ pub mod transaction {
 				return Err(InvalidTxReason::AuthorizationListNotExist);
 			}
 
-			// The field `to` deviates slightly from the semantics with the exception
-			// that it MUST NOT be nil and therefore must always represent
-			// a 20-byte address. This means that blob transactions cannot
-			// have the form of a create transaction.
-			let to_address: Option<Address> = test_tx.to.clone().into();
-			if to_address.is_none() {
-				return Err(InvalidTxReason::CreateTransaction);
-			}
-
 			// Check EIP-7702 Spec validation steps: 1 and 2
 			// Other validation step inside EVM transact logic.
 			for auth in test_tx.authorization_list.iter() {
 				// 1. Verify the chain id is either 0 or the chain’s current ID.
-				let mut is_valid =
-					auth.chain_id.0 == U256::from(0) || auth.chain_id.0 == vicinity.chain_id;
-				// 2. `authority = ecrecover(keccak(MAGIC || rlp([chain_id, address, nonce])), y_parity, r, s]`
+				let mut is_valid = if auth.chain_id.0 > U256::from(u64::MAX) {
+					false
+				} else {
+					auth.chain_id.0 == U256::from(0) || auth.chain_id.0 == vicinity.chain_id
+				};
+				// 3. `authority = ecrecover(keccak(MAGIC || rlp([chain_id, address, nonce])), y_parity, r, s]`
 
 				// Validate the signature, as in tests it is possible to have invalid signatures values.
 				let v = auth.v.0 .0;
 				if !(v[0] < u64::from(u8::MAX) && v[1..4].iter().all(|&elem| elem == 0)) {
-					return Err(InvalidTxReason::InvalidAuthorizationSignature);
+					is_valid = false;
 				}
 				// Value `v` shouldn't be greater then 1
 				if v[0] > 1 {
-					return Err(InvalidTxReason::InvalidAuthorizationSignature);
+					is_valid = false;
 				}
 				// EIP-2 validation
 				if auth.s.0 > eip7702::SECP256K1N_HALF {
-					return Err(InvalidTxReason::InvalidAuthorizationSignature);
+					is_valid = false;
 				}
 
 				let auth_address = eip7702::SignedAuthorization::new(
@@ -549,6 +543,7 @@ pub mod transaction {
 		GasPriseEip1559,
 		AuthorizationListNotExist,
 		AuthorizationListNotSupported,
+		InvalidAuthorizationChain,
 		InvalidAuthorizationSignature,
 		CreateTransaction,
 	}
