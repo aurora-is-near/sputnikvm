@@ -945,7 +945,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 	/// 9. Increase the `nonce` of `authority` by one.
 	///
 	/// It means, that steps 1,3 of spec must be passed before calling this function:
-	/// 1 Verify the chain id is either 0 or the chain’s current ID.
+	/// 1. Verify the chain id is either 0 or the chain’s current ID.
 	/// 3. `authority = ecrecover(...)`
 	///
 	/// See: [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702#behavior)
@@ -994,13 +994,13 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			// 8. Set the code of authority to be `0xef0100 || address`. This is a delegation designation.
 			// * As a special case, if address is 0x0000000000000000000000000000000000000000 do not write the designation.
 			//   Clear the account’s code.
-			let mut delegation_clearing = false;
-			if authority.address.is_zero() {
-				delegation_clearing = true;
+			let delegation_clearing = if authority.address.is_zero() {
 				state.set_code(authority.authority, Vec::new());
+				true
 			} else {
 				state.set_code(authority.authority, authority.delegation_code());
-			}
+				false
+			};
 			// 9. Increase the nonce of authority by one.
 			state.inc_nonce(authority.authority)?;
 
