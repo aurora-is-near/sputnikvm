@@ -369,8 +369,8 @@ fn resolve_execution_context(
         return Ok((chain.spec, None));
     }
     chain
-        .active_spec_and_blob_params_at_timestamp(timestamp)
-        .map(|(spec, params)| (spec, Some(params)))
+        .active_spec_at_timestamp(timestamp)
+        .map(|active| (active.spec(), Some(active.blob_params())))
         .ok_or(BlockExecutionError::ActiveSpecUnavailable { timestamp })
 }
 

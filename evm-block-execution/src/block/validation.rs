@@ -5,7 +5,7 @@
 //! The block codec also accepts earlier forks, but this validator intentionally rejects them.
 
 use crate::block::{BlockBody, Header, RecoveredBlock, SealedHeader};
-use crate::chain_spec::ChainSpec;
+use crate::chain_spec::{ActiveSpec, ChainSpec};
 use crate::constants::EMPTY_OMMER_ROOT_HASH;
 use crate::eips::eip1559::GAS_LIMIT_BOUND_DIVISOR;
 use crate::eips::eip4844::DATA_GAS_PER_BLOB;
@@ -29,7 +29,7 @@ const MAX_RLP_BLOCK_SIZE: usize = 8_388_608;
 /// Validates a recovered block before execution.
 ///
 /// The supplied parent must be the verified parent derived from the execution witness.
-/// On success, returns the timestamp-resolved fork and blob parameters execution must use.
+/// On success, returns the timestamp-resolved execution context.
 ///
 /// # Errors
 /// [`BlockValidationError`] if the header, parent transition or body commitments are invalid.
@@ -37,12 +37,12 @@ pub fn validate_block_consensus(
     chain_spec: &ChainSpec,
     block: &RecoveredBlock,
     parent: &SealedHeader,
-) -> Result<(Spec, BlobParams), BlockValidationError> {
-    let (active_spec, blob_params) = validate_header(chain_spec, block.header())?;
-    validate_header_against_parent(block.sealed_header(), parent, chain_spec, blob_params)?;
-    validate_block_pre_execution(block, active_spec)?;
+) -> Result<ActiveSpec, BlockValidationError> {
+    let active_spec = validate_header(chain_spec, block.header())?;
+    validate_header_against_parent(block.sealed_header(), parent, chain_spec, &active_spec)?;
+    validate_block_pre_execution(block, &active_spec)?;
 
-    Ok((active_spec, blob_params))
+    Ok(active_spec)
 }
 
 /// Resolves the Cancun-or-later execution context and validates standalone header rules.
@@ -53,9 +53,9 @@ pub fn validate_block_consensus(
 fn validate_header(
     chain_spec: &ChainSpec,
     header: &Header,
-) -> Result<(Spec, BlobParams), BlockValidationError> {
-    let (active_spec, blob_params) = chain_spec
-        .active_spec_and_blob_params_at_timestamp(header.timestamp)
+) -> Result<ActiveSpec, BlockValidationError> {
+    let active_spec = chain_spec
+        .active_spec_at_timestamp(header.timestamp)
         .ok_or(BlockValidationError::CancunNotActive {
             timestamp: header.timestamp,
         })?;
@@ -65,13 +65,13 @@ fn validate_header(
     validate_header_gas(header)?;
     validate_header_base_fee(header)?;
     validate_header_withdrawals_root(header)?;
-    validate_header_cancun_standalone(header, blob_params)?;
-    validate_header_requests_hash(header, active_spec)?;
+    validate_header_cancun_standalone(header, active_spec.blob_params())?;
+    validate_header_requests_hash(header, active_spec.spec())?;
 
     // TODO: related to Amsterdam hardfork
     validate_unsupported_header_fields(header)?;
 
-    Ok((active_spec, blob_params))
+    Ok(active_spec)
 }
 
 /// Validates the fixed post-Merge fields required by EIP-3675.
@@ -261,7 +261,7 @@ fn validate_header_against_parent(
     header: &SealedHeader,
     parent: &SealedHeader,
     chain_spec: &ChainSpec,
-    blob_params: BlobParams,
+    active_spec: &ActiveSpec,
 ) -> Result<(), BlockValidationError> {
     let parent_hash = parent.hash();
     if header.parent_hash != parent_hash {
@@ -309,7 +309,8 @@ fn validate_header_against_parent(
                 present: false,
             })?;
     // At the Cancun transition the parent has no blob fields; EIP-4844 defines both as zero.
-    let expected_excess_blob_gas = blob_params
+    let expected_excess_blob_gas = active_spec
+        .blob_params()
         .next_block_excess_blob_gas(
             parent.excess_blob_gas.unwrap_or(0),
             parent.blob_gas_used.unwrap_or(0),
@@ -486,11 +487,12 @@ fn encoded_usize_length(value: usize) -> usize {
 /// Validates commitments and body-only fork rules.
 fn validate_block_pre_execution(
     block: &RecoveredBlock,
-    active_spec: Spec,
+    active_spec: &ActiveSpec,
 ) -> Result<(), BlockValidationError> {
     let header = block.header();
-    let metrics = calculate_body_metrics(header, block.body(), active_spec)?;
-    validate_block_size(metrics.block_rlp_length, active_spec)?;
+    let spec = active_spec.spec();
+    let metrics = calculate_body_metrics(header, block.body(), spec)?;
+    validate_block_size(metrics.block_rlp_length, spec)?;
 
     if metrics.transactions_root != header.transactions_root {
         return Err(BlockValidationError::TransactionsRootMismatch {
@@ -776,8 +778,12 @@ mod tests {
     impl Fixture {
         fn new(max_spec: Spec, timestamp: u64) -> Self {
             let chain_spec = chain_spec(max_spec);
-            let active_spec = chain_spec.active_spec_at_timestamp(timestamp);
-            let parent_spec = chain_spec.active_spec_at_timestamp(timestamp - 1);
+            let active_spec = chain_spec
+                .active_spec_at_timestamp(timestamp)
+                .map(|active| active.spec());
+            let parent_spec = chain_spec
+                .active_spec_at_timestamp(timestamp - 1)
+                .map(|active| active.spec());
 
             let mut parent = active_header(parent_spec, timestamp - 1);
             parent.number = 10;
@@ -818,7 +824,8 @@ mod tests {
                 .active_spec_at_timestamp(self.block.timestamp)
                 .unwrap();
             let metrics =
-                calculate_body_metrics(&self.block.header, &self.block.body, active_spec).unwrap();
+                calculate_body_metrics(&self.block.header, &self.block.body, active_spec.spec())
+                    .unwrap();
             self.block.header.transactions_root = metrics.transactions_root;
             self.block.header.withdrawals_root = metrics.withdrawals_root;
         }
@@ -853,13 +860,15 @@ mod tests {
         let recovered =
             RecoveredBlock::try_new_unhashed(fixture.block.clone(), Vec::new()).unwrap();
 
+        let active_spec = validate_block_consensus(
+            &fixture.chain_spec,
+            &recovered,
+            &fixture.parent.clone().seal_slow(),
+        )
+        .unwrap();
         assert_eq!(
-            validate_block_consensus(
-                &fixture.chain_spec,
-                &recovered,
-                &fixture.parent.clone().seal_slow(),
-            ),
-            Ok((Spec::Prague, BlobParams::prague()))
+            (active_spec.spec(), active_spec.blob_params()),
+            (Spec::Prague, BlobParams::prague())
         );
     }
 
