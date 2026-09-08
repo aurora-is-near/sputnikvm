@@ -41,11 +41,15 @@ jobs:
           distro: bullseye
           githubToken: ${{ github.token }}
           run: |
-            # Bullseye is EOL, so its `-security` suite no longer refreshes and the Release file's
-            # `Valid-Until` has lapsed. That makes `apt-get update` exit non-zero even though the
-            # `main` suite still serves every package below, so relax the check and do not gate the
-            # install on the update's exit status.
-            apt-get -o Acquire::Check-Valid-Until=false update
+            # Fail on the first broken command and echo each one, so the log names the culprit
+            # instead of burying it under apt progress bars.
+            set -eux
+            # Bullseye is EOL: its `-security` suite no longer refreshes, its Release file has
+            # expired, and its pool is pruned, so the stale index advertises `.deb` files that are
+            # gone. Drop the dead suite rather than force-trusting it -- `main` still serves every
+            # package below and fetches cleanly.
+            sed -i '/-security/d' /etc/apt/sources.list
+            apt-get update
             apt-get install -y curl clang llvm
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             export PATH="$PATH:$HOME/.cargo/bin"
