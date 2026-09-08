@@ -44,16 +44,16 @@ jobs:
             # Fail on the first broken command and echo each one, so the log names the culprit
             # instead of burying it under apt progress bars.
             set -eux
-            # Bullseye is EOL: its `-security` suite no longer refreshes, its Release file has
-            # expired, and its pool is pruned, so the stale index advertises `.deb` files that are
-            # gone. Drop the dead suite rather than force-trusting it -- `main` still serves every
-            # package below and fetches cleanly.
-            sed -i '/-security/d' /etc/apt/sources.list
-            # `-qq` keeps apt's progress bars out of the log: they run to dozens of lines and push
-            # any real error past where the Actions viewer truncates the step output. Errors still
-            # reach stderr.
-            apt-get -qq update
-            apt-get -qq install -y curl clang llvm
+            # Bullseye is EOL, so its `-security` Release file has expired and `apt-get update`
+            # exits non-zero. The suite must stay listed: the base image already has packages
+            # installed from it, and hiding it leaves their dependencies unsatisfiable ("held
+            # broken packages"). So keep it and only relax the freshness check.
+            #
+            # `-qq` on update keeps its progress bars out of the log -- they run to dozens of lines
+            # and push later errors past where the Actions viewer truncates the step. The install
+            # stays verbose so an unmet-dependency report is not swallowed.
+            apt-get -qq -o Acquire::Check-Valid-Until=false update
+            apt-get install -y curl clang llvm
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
             export PATH="$PATH:$HOME/.cargo/bin"
             cargo test --all --verbose
