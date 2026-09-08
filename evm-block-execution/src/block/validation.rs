@@ -41,13 +41,14 @@ pub fn validate_block_consensus(
     let (active_spec, blob_params) = validate_header(chain_spec, block.header())?;
     validate_header_against_parent(block.sealed_header(), parent, chain_spec, blob_params)?;
     validate_block_pre_execution(block, active_spec)?;
+
     Ok((active_spec, blob_params))
 }
 
 /// Resolves the Cancun-or-later execution context and validates standalone header rules.
 ///
-/// Checks post-Merge constants, generic bounds, fork-specific fields, and EIP-4844 blob limits in
-/// consensus error order. Parent transitions and body commitments are validated separately.
+/// Checks post-Merge constants, generic bounds, fork-specific fields, and EIP-4844 blob limits.
+/// Parent transitions and body commitments are validated separately.
 #[inline]
 fn validate_header(
     chain_spec: &ChainSpec,
@@ -64,10 +65,12 @@ fn validate_header(
     validate_header_gas(header)?;
     validate_header_base_fee(header)?;
     validate_header_withdrawals_root(header)?;
-    validate_header_cancun_fields(header)?;
-    validate_header_requests_hash(header, active_spec >= Spec::Prague)?;
+    validate_header_cancun_standalone(header, blob_params)?;
+    validate_header_requests_hash(header, active_spec)?;
+
+    // TODO: related to Amsterdam hardfork
     validate_unsupported_header_fields(header)?;
-    validate_blob_header(header, blob_params)?;
+
     Ok((active_spec, blob_params))
 }
 
@@ -135,11 +138,14 @@ const fn validate_header_gas(header: &Header) -> Result<(), BlockValidationError
 /// This validator accepts Cancun-or-later blocks, so the field is always required.
 #[inline]
 const fn validate_header_base_fee(header: &Header) -> Result<(), BlockValidationError> {
-    validate_fork_field(
-        HeaderField::BaseFeePerGas,
-        header.base_fee_per_gas.is_some(),
-        true,
-    )
+    if header.base_fee_per_gas.is_none() {
+        return Err(BlockValidationError::ForkFieldMismatch {
+            field: HeaderField::BaseFeePerGas,
+            present: false,
+        });
+    }
+
+    Ok(())
 }
 
 /// Requires the EIP-4895 withdrawals root introduced by Shanghai.
@@ -147,48 +153,89 @@ const fn validate_header_base_fee(header: &Header) -> Result<(), BlockValidation
 /// This validator accepts Cancun-or-later blocks, so the field is always required.
 #[inline]
 const fn validate_header_withdrawals_root(header: &Header) -> Result<(), BlockValidationError> {
-    validate_fork_field(
-        HeaderField::WithdrawalsRoot,
-        header.withdrawals_root.is_some(),
-        true,
-    )
+    if header.withdrawals_root.is_none() {
+        return Err(BlockValidationError::ForkFieldMismatch {
+            field: HeaderField::WithdrawalsRoot,
+            present: false,
+        });
+    }
+
+    Ok(())
 }
 
-/// Requires the EIP-4844 blob fields and EIP-4788 parent beacon root introduced by Cancun.
+/// Validates the Cancun header fields that need no parent.
+///
+/// The EIP-4844 blob fields and the EIP-4788 parent beacon root must be present, and
+/// `blob_gas_used` must be an integral number of blobs within the active schedule's block limit.
 #[inline]
-const fn validate_header_cancun_fields(header: &Header) -> Result<(), BlockValidationError> {
-    if header.blob_gas_used.is_none() {
+const fn validate_header_cancun_standalone(
+    header: &Header,
+    blob_params: BlobParams,
+) -> Result<(), BlockValidationError> {
+    let Some(blob_gas_used) = header.blob_gas_used else {
         return Err(BlockValidationError::ForkFieldMismatch {
             field: HeaderField::BlobGasUsed,
             present: false,
         });
-    }
-    if header.excess_blob_gas.is_none() {
-        return Err(BlockValidationError::ForkFieldMismatch {
-            field: HeaderField::ExcessBlobGas,
-            present: false,
-        });
-    }
+    };
+
     if header.parent_beacon_block_root.is_none() {
         return Err(BlockValidationError::ForkFieldMismatch {
             field: HeaderField::ParentBeaconBlockRoot,
             present: false,
         });
     }
+
+    if header.excess_blob_gas.is_none() {
+        return Err(BlockValidationError::ForkFieldMismatch {
+            field: HeaderField::ExcessBlobGas,
+            present: false,
+        });
+    }
+
+    if !blob_gas_used.is_multiple_of(DATA_GAS_PER_BLOB) {
+        return Err(BlockValidationError::BlobGasUsedNotMultiple { blob_gas_used });
+    }
+
+    let max = blob_params.max_blob_gas_per_block();
+    if blob_gas_used > max {
+        return Err(BlockValidationError::BlobGasUsedExceedsMaximum { blob_gas_used, max });
+    }
+
     Ok(())
 }
 
-/// Validates the EIP-7685 requests hash, introduced by Prague.
+/// Requires the EIP-7685 requests hash from Prague and rejects it before activation.
 #[inline]
 const fn validate_header_requests_hash(
     header: &Header,
-    required: bool,
+    active_spec: Spec,
 ) -> Result<(), BlockValidationError> {
-    validate_fork_field(
-        HeaderField::RequestsHash,
-        header.requests_hash.is_some(),
-        required,
-    )
+    let prague_active = match active_spec {
+        Spec::Prague | Spec::Osaka => true,
+        Spec::Istanbul
+        | Spec::Berlin
+        | Spec::London
+        | Spec::Merge
+        | Spec::Shanghai
+        | Spec::Cancun => false,
+    };
+
+    if prague_active {
+        if header.requests_hash.is_none() {
+            return Err(BlockValidationError::ForkFieldMismatch {
+                field: HeaderField::RequestsHash,
+                present: false,
+            });
+        }
+    } else if header.requests_hash.is_some() {
+        return Err(BlockValidationError::ForkFieldMismatch {
+            field: HeaderField::RequestsHash,
+            present: true,
+        });
+    }
+
+    Ok(())
 }
 
 /// Rejects EIP-7928 and EIP-7843 fields, which activate after the latest supported fork.
@@ -205,43 +252,6 @@ const fn validate_unsupported_header_fields(header: &Header) -> Result<(), Block
             field: HeaderField::SlotNumber,
             present: true,
         });
-    }
-    Ok(())
-}
-
-/// Validates one optional fork field.
-#[inline]
-const fn validate_fork_field(
-    field: HeaderField,
-    present: bool,
-    required: bool,
-) -> Result<(), BlockValidationError> {
-    if present == required {
-        Ok(())
-    } else {
-        Err(BlockValidationError::ForkFieldMismatch { field, present })
-    }
-}
-
-/// Validates EIP-4844 blob-gas granularity and the active block maximum.
-#[inline]
-const fn validate_blob_header(
-    header: &Header,
-    blob_params: BlobParams,
-) -> Result<(), BlockValidationError> {
-    let Some(blob_gas_used) = header.blob_gas_used else {
-        return Err(BlockValidationError::ForkFieldMismatch {
-            field: HeaderField::BlobGasUsed,
-            present: false,
-        });
-    };
-    if blob_gas_used % DATA_GAS_PER_BLOB != 0 {
-        return Err(BlockValidationError::BlobGasUsedNotMultiple { blob_gas_used });
-    }
-
-    let max = blob_params.max_blob_gas_per_block();
-    if blob_gas_used > max {
-        return Err(BlockValidationError::BlobGasUsedExceedsMaximum { blob_gas_used, max });
     }
     Ok(())
 }
@@ -904,25 +914,47 @@ mod tests {
 
     #[test]
     fn required_and_future_header_fields_are_rejected() {
-        let mut fixture = Fixture::new(Spec::Osaka, OSAKA_TIMESTAMP + 1);
-        fixture.block.header.parent_beacon_block_root = None;
-        assert_eq!(
-            fixture.validate(),
-            Err(BlockValidationError::ForkFieldMismatch {
-                field: HeaderField::ParentBeaconBlockRoot,
-                present: false,
-            })
-        );
+        /// The field a mutation violates, whether the header then carries it, and the mutation.
+        type Violation = (HeaderField, bool, fn(&mut Header));
 
-        let mut fixture = Fixture::new(Spec::Osaka, OSAKA_TIMESTAMP + 1);
-        fixture.block.header.block_access_list_hash = Some(H256::zero());
-        assert_eq!(
-            fixture.validate(),
-            Err(BlockValidationError::ForkFieldMismatch {
-                field: HeaderField::BlockAccessListHash,
-                present: true,
-            })
-        );
+        // One row per trailing field, covering the error exposed by the complete validation
+        // pipeline. Some required fields are deliberately checked again by later stages.
+        let mutations: [Violation; 8] = [
+            (HeaderField::BaseFeePerGas, false, |header| {
+                header.base_fee_per_gas = None;
+            }),
+            (HeaderField::WithdrawalsRoot, false, |header| {
+                header.withdrawals_root = None;
+            }),
+            (HeaderField::BlobGasUsed, false, |header| {
+                header.blob_gas_used = None;
+            }),
+            (HeaderField::ParentBeaconBlockRoot, false, |header| {
+                header.parent_beacon_block_root = None;
+            }),
+            (HeaderField::ExcessBlobGas, false, |header| {
+                header.excess_blob_gas = None;
+            }),
+            (HeaderField::RequestsHash, false, |header| {
+                header.requests_hash = None;
+            }),
+            (HeaderField::BlockAccessListHash, true, |header| {
+                header.block_access_list_hash = Some(H256::zero());
+            }),
+            (HeaderField::SlotNumber, true, |header| {
+                header.slot_number = Some(0);
+            }),
+        ];
+
+        for (field, present, mutate) in mutations {
+            let mut fixture = Fixture::new(Spec::Osaka, OSAKA_TIMESTAMP + 1);
+            mutate(&mut fixture.block.header);
+            assert_eq!(
+                fixture.validate(),
+                Err(BlockValidationError::ForkFieldMismatch { field, present }),
+                "{field:?}"
+            );
+        }
     }
 
     #[test]
