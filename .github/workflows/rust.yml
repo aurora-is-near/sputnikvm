@@ -49,9 +49,12 @@ jobs:
             # gone. Drop the dead suite rather than force-trusting it -- `main` still serves every
             # package below and fetches cleanly.
             sed -i '/-security/d' /etc/apt/sources.list
-            apt-get update
-            apt-get install -y curl clang llvm
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            # `-qq` keeps apt's progress bars out of the log: they run to dozens of lines and push
+            # any real error past where the Actions viewer truncates the step output. Errors still
+            # reach stderr.
+            apt-get -qq update
+            apt-get -qq install -y curl clang llvm
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
             export PATH="$PATH:$HOME/.cargo/bin"
             cargo test --all --verbose
 
