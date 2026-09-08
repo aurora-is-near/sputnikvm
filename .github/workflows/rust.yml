@@ -38,21 +38,19 @@ jobs:
         id: tests
         with:
           arch: i386
-          distro: bullseye
+          # Bookworm, not bullseye: bullseye is EOL, so its `-security` Release file has expired
+          # and its pool is pruned. Hiding that suite makes the base image's installed packages
+          # unresolvable, keeping it makes `libc6-dev` and `linux-libc-dev` 404 -- no apt flag
+          # resolves both, so the image itself has to be a supported release.
+          distro: bookworm
           githubToken: ${{ github.token }}
           run: |
-            # Fail on the first broken command and echo each one, so the log names the culprit
-            # instead of burying it under apt progress bars.
+            # Fail on the first broken command and echo each one; keep apt's progress bars out of
+            # the log, since they run long enough to push later errors past where the Actions
+            # viewer truncates the step. The install stays verbose so a dependency report is not
+            # swallowed.
             set -eux
-            # Bullseye is EOL, so its `-security` Release file has expired and `apt-get update`
-            # exits non-zero. The suite must stay listed: the base image already has packages
-            # installed from it, and hiding it leaves their dependencies unsatisfiable ("held
-            # broken packages"). So keep it and only relax the freshness check.
-            #
-            # `-qq` on update keeps its progress bars out of the log -- they run to dozens of lines
-            # and push later errors past where the Actions viewer truncates the step. The install
-            # stays verbose so an unmet-dependency report is not swallowed.
-            apt-get -qq -o Acquire::Check-Valid-Until=false update
+            apt-get -qq update
             apt-get install -y curl clang llvm
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
             export PATH="$PATH:$HOME/.cargo/bin"
