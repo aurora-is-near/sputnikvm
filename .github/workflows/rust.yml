@@ -33,28 +33,23 @@ jobs:
         with:
           persist-credentials: false
 
+      # A plain `docker run` rather than run-on-arch-action: that action ships one Dockerfile per
+      # distro and has none past `i386.bullseye`, and bullseye is EOL -- its `-security` Release
+      # file has expired and its pool is pruned, so hiding that suite leaves the image's installed
+      # packages unresolvable while keeping it 404s `libc6-dev`. Choosing the image directly gets
+      # us a supported release. i386 needs no emulation on an amd64 host, only `--platform`, which
+      # also makes the container report `i686` to `uname`.
       - name: Run tests 32 bit
-        uses: vxcontrol/run-on-arch-action@0.9.0
-        id: tests
-        with:
-          arch: i386
-          # Bookworm, not bullseye: bullseye is EOL, so its `-security` Release file has expired
-          # and its pool is pruned. Hiding that suite makes the base image's installed packages
-          # unresolvable, keeping it makes `libc6-dev` and `linux-libc-dev` 404 -- no apt flag
-          # resolves both, so the image itself has to be a supported release.
-          distro: bookworm
-          githubToken: ${{ github.token }}
-          run: |
-            # Fail on the first broken command and echo each one; keep apt's progress bars out of
-            # the log, since they run long enough to push later errors past where the Actions
-            # viewer truncates the step. The install stays verbose so a dependency report is not
-            # swallowed.
-            set -eux
-            apt-get -qq update
-            apt-get install -y curl clang llvm
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-            export PATH="$PATH:$HOME/.cargo/bin"
-            cargo test --all --verbose
+        run: |
+          docker run --rm --platform linux/386 -v "$PWD":/work -w /work \
+            i386/debian:bookworm sh -eux -c '
+              apt-get -qq update
+              apt-get install -y curl clang llvm
+              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \
+                | sh -s -- -y --profile minimal --default-host i686-unknown-linux-gnu
+              . "$HOME/.cargo/env"
+              cargo test --all --verbose
+            '
 
   ethereum-tests:
     runs-on: ubuntu-latest
