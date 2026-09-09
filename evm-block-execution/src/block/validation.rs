@@ -550,7 +550,7 @@ fn encoded_usize_length(value: usize) -> usize {
     usize::try_from((usize::BITS - value.leading_zeros()).div_ceil(8)).unwrap_or(usize::MAX)
 }
 
-/// Validates commitments and body-only fork rules.
+/// Validates body commitments and fork-specific body rules from one metrics pass.
 fn validate_block_pre_execution(
     block: &RecoveredBlock,
     active_spec: &ActiveSpec,
@@ -558,40 +558,57 @@ fn validate_block_pre_execution(
     let header = block.header();
     let spec = active_spec.spec();
     let metrics = calculate_body_metrics(header, block.body(), spec)?;
+
+    // Ommers match by construction: the codec requires an empty list and header validation requires
+    // its canonical root.
     validate_block_size(metrics.block_rlp_length, spec)?;
+    validate_shanghai_withdrawals(header.withdrawals_root, metrics.withdrawals_root)?;
+    validate_cancun_gas(header.blob_gas_used, metrics.blob_gas_used)?;
+    validate_transactions_root(header.transactions_root, metrics.transactions_root)
+}
 
-    if metrics.transactions_root != header.transactions_root {
-        return Err(BlockValidationError::TransactionsRootMismatch {
-            header: header.transactions_root,
-            computed: metrics.transactions_root,
-        });
-    }
-    match (header.withdrawals_root, metrics.withdrawals_root) {
+/// Validates EIP-4895 withdrawals presence and root.
+#[inline]
+fn validate_shanghai_withdrawals(
+    header_root: Option<H256>,
+    computed_root: Option<H256>,
+) -> Result<(), BlockValidationError> {
+    match (header_root, computed_root) {
         (Some(header), Some(computed)) if header != computed => {
-            return Err(BlockValidationError::WithdrawalsRootMismatch { header, computed });
+            Err(BlockValidationError::WithdrawalsRootMismatch { header, computed })
         }
-        (Some(_), Some(_)) | (None, None) => {}
-        (header, body) => {
-            return Err(BlockValidationError::WithdrawalsPresenceMismatch {
-                header: header.is_some(),
-                body: body.is_some(),
-            });
-        }
+        (Some(_), Some(_)) | (None, None) => Ok(()),
+        (header, body) => Err(BlockValidationError::WithdrawalsPresenceMismatch {
+            header: header.is_some(),
+            body: body.is_some(),
+        }),
+    }
+}
+
+/// Validates EIP-4844 blob gas against the block body.
+#[inline]
+fn validate_cancun_gas(
+    header_blob_gas_used: Option<u64>,
+    computed: u64,
+) -> Result<(), BlockValidationError> {
+    let header = header_blob_gas_used.ok_or(BlockValidationError::ForkFieldMismatch {
+        field: HeaderField::BlobGasUsed,
+        present: false,
+    })?;
+    if computed != header {
+        return Err(BlockValidationError::BlobGasUsedMismatch { header, computed });
     }
 
-    let header_blob_gas_used =
-        header
-            .blob_gas_used
-            .ok_or(BlockValidationError::ForkFieldMismatch {
-                field: HeaderField::BlobGasUsed,
-                present: false,
-            })?;
-    if metrics.blob_gas_used != header_blob_gas_used {
-        return Err(BlockValidationError::BlobGasUsedMismatch {
-            header: header_blob_gas_used,
-            computed: metrics.blob_gas_used,
-        });
+    Ok(())
+}
+
+/// Validates the transactions trie commitment.
+#[inline]
+fn validate_transactions_root(header: H256, computed: H256) -> Result<(), BlockValidationError> {
+    if computed != header {
+        return Err(BlockValidationError::TransactionsRootMismatch { header, computed });
     }
+
     Ok(())
 }
 
@@ -800,6 +817,7 @@ mod tests {
     const CANCUN_TIMESTAMP: u64 = 100;
     const PRAGUE_TIMESTAMP: u64 = 200;
     const OSAKA_TIMESTAMP: u64 = 300;
+    const BPO_TIMESTAMP: u64 = 400;
     const GAS_LIMIT: u64 = 30_000_000;
     const BASE_FEE: u64 = 100;
 
@@ -935,6 +953,78 @@ mod tests {
         assert_eq!(
             (active_spec.spec(), active_spec.blob_params()),
             (Spec::Prague, BlobParams::prague())
+        );
+    }
+
+    #[test]
+    fn bpo_activation_changes_the_parent_blob_gas_transition() {
+        let mut fixture = Fixture::new(Spec::Osaka, BPO_TIMESTAMP);
+        fixture.chain_spec.blob_schedule =
+            BlobScheduleBlobParams::mainnet().with_scheduled([(BPO_TIMESTAMP, BlobParams::bpo1())]);
+
+        // Nine blobs are above Osaka's target but below BPO1's. This makes the expected child
+        // excess zero under BPO1 and three blobs under the obsolete Osaka parameters.
+        let parent_blob_gas = 9 * DATA_GAS_PER_BLOB;
+        assert_eq!(
+            BlobParams::bpo1().next_block_excess_blob_gas(0, parent_blob_gas, BASE_FEE),
+            Some(0)
+        );
+        assert_eq!(
+            BlobParams::osaka().next_block_excess_blob_gas(0, parent_blob_gas, BASE_FEE),
+            Some(3 * DATA_GAS_PER_BLOB)
+        );
+        fixture.parent.blob_gas_used = Some(parent_blob_gas);
+        fixture.parent.excess_blob_gas = Some(0);
+        fixture.relink();
+
+        let recovered =
+            RecoveredBlock::try_new_unhashed(fixture.block.clone(), Vec::new()).unwrap();
+        let active_spec = validate_block_consensus(
+            &fixture.chain_spec,
+            &recovered,
+            &fixture.parent.clone().seal_slow(),
+        )
+        .unwrap();
+
+        assert_eq!(active_spec.spec(), Spec::Osaka);
+        assert_eq!(active_spec.blob_params(), BlobParams::bpo1());
+
+        let osaka_excess = 3 * DATA_GAS_PER_BLOB;
+        fixture.block.header.excess_blob_gas = Some(osaka_excess);
+        assert_eq!(
+            fixture.validate(),
+            Err(BlockValidationError::ExcessBlobGasMismatch {
+                header: osaka_excess,
+                expected: 0,
+            })
+        );
+    }
+
+    #[test]
+    fn bpo_block_blob_limit_is_used_by_consensus_validation() {
+        let mut fixture = Fixture::new(Spec::Osaka, BPO_TIMESTAMP + 1);
+        fixture.chain_spec.blob_schedule =
+            BlobScheduleBlobParams::mainnet().with_scheduled([(BPO_TIMESTAMP, BlobParams::bpo1())]);
+
+        // Ten blobs exceed Osaka's block limit but fit under BPO1, so the same block distinguishes
+        // whether consensus validation uses the scheduled parameters.
+        let blob_count = BlobParams::osaka().max_blob_count + 1;
+        assert!(blob_count <= BlobParams::bpo1().max_blob_count);
+        let transaction = blob_transaction();
+        fixture.block.body.transactions =
+            vec![transaction; usize::try_from(blob_count).expect("test blob count fits in usize")];
+        fixture.block.header.blob_gas_used = Some(blob_count * DATA_GAS_PER_BLOB);
+        fixture.sync_body_commitments();
+
+        assert_eq!(fixture.validate(), Ok(()));
+
+        fixture.chain_spec.blob_schedule = BlobScheduleBlobParams::mainnet();
+        assert_eq!(
+            fixture.validate(),
+            Err(BlockValidationError::BlobGasUsedExceedsMaximum {
+                blob_gas_used: blob_count * DATA_GAS_PER_BLOB,
+                max: BlobParams::osaka().max_blob_gas_per_block(),
+            })
         );
     }
 
