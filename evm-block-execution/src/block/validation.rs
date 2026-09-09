@@ -7,7 +7,7 @@
 use crate::block::{BlockBody, Header, RecoveredBlock, SealedHeader};
 use crate::chain_spec::{ActiveSpec, ChainSpec};
 use crate::constants::EMPTY_OMMER_ROOT_HASH;
-use crate::eips::eip1559::GAS_LIMIT_BOUND_DIVISOR;
+use crate::eips::eip1559::{BaseFeeParams, GAS_LIMIT_BOUND_DIVISOR};
 use crate::eips::eip4844::DATA_GAS_PER_BLOB;
 use crate::eips::eip7840::BlobParams;
 use crate::errors::HeaderField;
@@ -257,6 +257,7 @@ const fn validate_unsupported_header_fields(header: &Header) -> Result<(), Block
 }
 
 /// Validates the current header against its parent.
+#[inline]
 fn validate_header_against_parent(
     header: &SealedHeader,
     parent: &SealedHeader,
@@ -264,43 +265,31 @@ fn validate_header_against_parent(
     active_spec: &ActiveSpec,
 ) -> Result<(), BlockValidationError> {
     let parent_hash = parent.hash();
-    if header.parent_hash != parent_hash {
-        return Err(BlockValidationError::ParentHashMismatch {
-            header: header.parent_hash,
-            parent: parent_hash,
-        });
-    }
-    if parent.number.checked_add(1) != Some(header.number) {
-        return Err(BlockValidationError::ParentNumberMismatch {
-            parent: parent.number,
-            child: header.number,
-        });
-    }
-    if header.timestamp <= parent.timestamp {
-        return Err(BlockValidationError::TimestampNotAfterParent {
-            parent: parent.timestamp,
-            child: header.timestamp,
-        });
-    }
 
+    validate_against_parent_hash_number(header, parent_hash, parent.number)?;
+    validate_against_parent_timestamp(header.timestamp, parent.timestamp)?;
     validate_gas_limit_against_parent(header.gas_limit, parent.gas_limit)?;
 
-    let base_fee = header
-        .base_fee_per_gas
-        .ok_or(BlockValidationError::ForkFieldMismatch {
-            field: HeaderField::BaseFeePerGas,
-            present: false,
-        })?;
-    let expected_base_fee = parent
-        .next_block_base_fee(chain_spec.base_fee_params)
-        .ok_or(BlockValidationError::BaseFeeTransitionUnavailable)?;
-    if base_fee != expected_base_fee {
-        return Err(BlockValidationError::BaseFeeMismatch {
-            header: base_fee,
-            expected: expected_base_fee,
-        });
-    }
+    validate_against_parent_eip1559_base_fee(header, parent, chain_spec.base_fee_params)?;
 
+    validate_against_parent_4844(header, parent, active_spec)?;
+
+    Ok(())
+}
+
+/// Validates the EIP-4844 header fields against the parent block.
+///
+/// The `excess_blob_gas` field must exist in the child header and match the value calculated from
+/// the parent header fields.
+#[inline]
+fn validate_against_parent_4844(
+    header: &SealedHeader,
+    parent: &SealedHeader,
+    active_spec: &ActiveSpec,
+) -> Result<(), BlockValidationError> {
+    // `header.blob_gas_used` is not re-checked here: `validate_header_cancun_standalone` binds it
+    // earlier in the pipeline, so a second check would be unreachable. The reference repeats it
+    // because its `validate_against_parent_4844` is a public, self-contained entry point.
     let excess_blob_gas =
         header
             .excess_blob_gas
@@ -323,33 +312,110 @@ fn validate_header_against_parent(
             expected: expected_excess_blob_gas,
         });
     }
+
+    Ok(())
+}
+
+/// Validates the base fee against the parent and EIP-1559 rules.
+#[inline]
+fn validate_against_parent_eip1559_base_fee(
+    header: &SealedHeader,
+    parent: &SealedHeader,
+    base_fee_params: BaseFeeParams,
+) -> Result<(), BlockValidationError> {
+    let base_fee = header
+        .base_fee_per_gas
+        .ok_or(BlockValidationError::ForkFieldMismatch {
+            field: HeaderField::BaseFeePerGas,
+            present: false,
+        })?;
+    let expected_base_fee = parent
+        .next_block_base_fee(base_fee_params)
+        .ok_or(BlockValidationError::BaseFeeTransitionUnavailable)?;
+    if base_fee != expected_base_fee {
+        return Err(BlockValidationError::BaseFeeMismatch {
+            header: base_fee,
+            expected: expected_base_fee,
+        });
+    }
+
+    Ok(())
+}
+
+/// Validates against the parent hash and number.
+///
+/// This function ensures that the header block number is sequential and that the hash of the parent
+/// header matches the parent hash in the header.
+#[inline]
+fn validate_against_parent_hash_number(
+    header: &SealedHeader,
+    parent_hash: H256,
+    parent_number: u64,
+) -> Result<(), BlockValidationError> {
+    if header.parent_hash != parent_hash {
+        return Err(BlockValidationError::ParentHashMismatch {
+            header: header.parent_hash,
+            parent: parent_hash,
+        });
+    }
+    // Check if parent number is consistent.
+    if parent_number.checked_add(1) != Some(header.number) {
+        return Err(BlockValidationError::ParentNumberMismatch {
+            parent: parent_number,
+            child: header.number,
+        });
+    }
+
+    Ok(())
+}
+
+/// Validates that the block timestamp is greater than the parent block timestamp.
+#[inline]
+const fn validate_against_parent_timestamp(
+    header_timestamp: u64,
+    parent_timestamp: u64,
+) -> Result<(), BlockValidationError> {
+    if header_timestamp <= parent_timestamp {
+        return Err(BlockValidationError::TimestampNotAfterParent {
+            parent: parent_timestamp,
+            child: header_timestamp,
+        });
+    }
+
     Ok(())
 }
 
 /// Validates the EIP-1559 gas-limit ramp and minimum.
+#[inline]
 const fn validate_gas_limit_against_parent(
     gas_limit: u64,
     parent_gas_limit: u64,
 ) -> Result<(), BlockValidationError> {
     let bound = parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR;
-    if gas_limit > parent_gas_limit && gas_limit - parent_gas_limit >= bound {
-        return Err(BlockValidationError::GasLimitInvalidIncrease {
-            parent: parent_gas_limit,
-            child: gas_limit,
-        });
+    // Check for an increase in gas limit beyond the allowed threshold.
+    if gas_limit > parent_gas_limit {
+        if gas_limit - parent_gas_limit >= bound {
+            return Err(BlockValidationError::GasLimitInvalidIncrease {
+                parent: parent_gas_limit,
+                child: gas_limit,
+            });
+        }
     }
-    if gas_limit < parent_gas_limit && parent_gas_limit - gas_limit >= bound {
+    // Check for a decrease in gas limit beyond the allowed threshold.
+    else if parent_gas_limit - gas_limit >= bound {
         return Err(BlockValidationError::GasLimitInvalidDecrease {
             parent: parent_gas_limit,
             child: gas_limit,
         });
     }
+    // Check if the self gas limit is below the minimum required limit.
     if gas_limit < MINIMUM_GAS_LIMIT {
         return Err(BlockValidationError::GasLimitBelowMinimum {
             gas_limit,
             min: MINIMUM_GAS_LIMIT,
         });
     }
+
     Ok(())
 }
 
