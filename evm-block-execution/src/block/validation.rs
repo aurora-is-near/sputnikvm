@@ -33,6 +33,7 @@ const MAX_RLP_BLOCK_SIZE: usize = 8_388_608;
 ///
 /// # Errors
 /// [`BlockValidationError`] if the header, parent transition or body commitments are invalid.
+#[inline]
 pub fn validate_block_consensus(
     chain_spec: &ChainSpec,
     block: &RecoveredBlock,
@@ -68,7 +69,7 @@ fn validate_header(
     validate_header_cancun_standalone(header, active_spec.blob_params())?;
     validate_header_requests_hash(header, active_spec.spec())?;
 
-    // TODO: related to Amsterdam hardfork
+    // TODO: related to Amsterdam hard fork
     validate_unsupported_header_fields(header)?;
 
     Ok(active_spec)
@@ -96,6 +97,7 @@ fn validate_post_merge_fields(header: &Header) -> Result<(), BlockValidationErro
             found: header.ommers_hash,
         });
     }
+
     Ok(())
 }
 
@@ -108,6 +110,7 @@ const fn validate_header_extra_data(header: &Header) -> Result<(), BlockValidati
             max: MAX_EXTRA_DATA_SIZE,
         });
     }
+
     Ok(())
 }
 
@@ -253,6 +256,7 @@ const fn validate_unsupported_header_fields(header: &Header) -> Result<(), Block
             present: true,
         });
     }
+
     Ok(())
 }
 
@@ -528,6 +532,7 @@ fn calculate_block_rlp_length(
         .and_then(|length| length.checked_add(1))
         .and_then(|length| length.checked_add(withdrawals_length))
         .ok_or(BlockValidationError::ArithmeticOverflow)?;
+
     rlp_container_length(block_payload_length)
 }
 
@@ -551,6 +556,7 @@ fn encoded_usize_length(value: usize) -> usize {
 }
 
 /// Validates body commitments and fork-specific body rules from one metrics pass.
+#[inline]
 fn validate_block_pre_execution(
     block: &RecoveredBlock,
     active_spec: &ActiveSpec,
@@ -559,11 +565,15 @@ fn validate_block_pre_execution(
     let spec = active_spec.spec();
     let metrics = calculate_body_metrics(header, block.body(), spec)?;
 
-    // Ommers match by construction: the codec requires an empty list and header validation requires
-    // its canonical root.
-    validate_block_size(metrics.block_rlp_length, spec)?;
+    // NOTE: Ommers match by construction - the codec requires an empty list and header validation
+    // requires its canonical root.
+
+    // EIP-4895: Beacon chain push withdrawals as operations
     validate_shanghai_withdrawals(header.withdrawals_root, metrics.withdrawals_root)?;
     validate_cancun_gas(header.blob_gas_used, metrics.blob_gas_used)?;
+    // Applies EIP-7934 from Osaka onward.
+    validate_block_size(metrics.block_rlp_length, spec)?;
+
     validate_transactions_root(header.transactions_root, metrics.transactions_root)
 }
 
@@ -573,14 +583,21 @@ fn validate_shanghai_withdrawals(
     header_root: Option<H256>,
     computed_root: Option<H256>,
 ) -> Result<(), BlockValidationError> {
-    match (header_root, computed_root) {
-        (Some(header), Some(computed)) if header != computed => {
+    // Header validation already requires this field for every supported fork. Recheck it here so
+    // this commitment validator remains fail-closed if the surrounding pipeline is rearranged.
+    let header = header_root.ok_or(BlockValidationError::ForkFieldMismatch {
+        field: HeaderField::WithdrawalsRoot,
+        present: false,
+    })?;
+
+    match computed_root {
+        Some(computed) if header != computed => {
             Err(BlockValidationError::WithdrawalsRootMismatch { header, computed })
         }
-        (Some(_), Some(_)) | (None, None) => Ok(()),
-        (header, body) => Err(BlockValidationError::WithdrawalsPresenceMismatch {
-            header: header.is_some(),
-            body: body.is_some(),
+        Some(_) => Ok(()),
+        None => Err(BlockValidationError::WithdrawalsPresenceMismatch {
+            header: true,
+            body: false,
         }),
     }
 }
@@ -613,15 +630,16 @@ fn validate_transactions_root(header: H256, computed: H256) -> Result<(), BlockV
 }
 
 /// Applies EIP-7934 from Osaka onward.
+#[inline]
 fn validate_block_size(rlp_length: usize, active_spec: Spec) -> Result<(), BlockValidationError> {
     if active_spec >= Spec::Osaka && rlp_length > MAX_RLP_BLOCK_SIZE {
-        Err(BlockValidationError::BlockTooLarge {
+        return Err(BlockValidationError::BlockTooLarge {
             rlp_length,
             max: MAX_RLP_BLOCK_SIZE,
-        })
-    } else {
-        Ok(())
+        });
     }
+
+    Ok(())
 }
 
 /// Why a block fails pre-execution consensus validation.
@@ -797,7 +815,7 @@ impl core::error::Error for BlockValidationError {}
 mod tests {
     use super::{
         BlockValidationError, MAX_RLP_BLOCK_SIZE, MAXIMUM_GAS_LIMIT, calculate_body_metrics,
-        validate_block_consensus, validate_block_size,
+        validate_block_consensus, validate_block_size, validate_shanghai_withdrawals,
     };
     use crate::block::codec::tests::vectors;
     use crate::block::{Block, BlockBody, Header, RecoveredBlock};
@@ -1334,6 +1352,17 @@ mod tests {
             Err(BlockValidationError::WithdrawalsPresenceMismatch {
                 header: true,
                 body: false,
+            })
+        );
+    }
+
+    #[test]
+    fn withdrawals_validation_rejects_joint_absence() {
+        assert_eq!(
+            validate_shanghai_withdrawals(None, None),
+            Err(BlockValidationError::ForkFieldMismatch {
+                field: HeaderField::WithdrawalsRoot,
+                present: false,
             })
         );
     }
